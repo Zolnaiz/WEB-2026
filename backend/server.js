@@ -78,6 +78,38 @@ function persist() {
 }
 const genId = (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
+const requestLocks = new Set();
+function withRequestLock(key, onLocked, fn) {
+  if (requestLocks.has(key)) return onLocked();
+  requestLocks.add(key);
+  try {
+    return fn();
+  } finally {
+    requestLocks.delete(key);
+  }
+}
+
+function normalizeSubmissionPayload(body = {}) {
+  const content = typeof body.content === 'string' ? body.content : '';
+  const fileUrlRaw = body.fileUrl ?? body.file_url ?? '';
+  const fileUrl = typeof fileUrlRaw === 'string' ? fileUrlRaw : '';
+  return { content, fileUrl };
+}
+
+function ensureAttemptNotExpired(attempt, exam) {
+  if (!attempt || attempt.status !== 'started') return false;
+  const startedAtMs = new Date(attempt.startedAt).getTime();
+  const expiresAt = startedAtMs + ((Number(exam?.durationMinutes) || 30) * 60 * 1000);
+  if (Date.now() <= expiresAt) return false;
+  attempt.status = 'finished';
+  attempt.score = attempt.score ?? 0;
+  attempt.finishedAt = attempt.finishedAt || new Date().toISOString();
+  attempt.expired = true;
+  persist();
+  return true;
+}
+
+
 function signToken(payload) {
   const exp = Math.floor(Date.now() / 1000) + 60 * 60 * 12;
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
@@ -141,7 +173,7 @@ function ensureTeacherOwnsCourse(req, res, courseId) {
   return false;
 }
 
-app.get('/api/health', (_, res) => res.json({ ok: true }));
+app.get('/api/health', (_req, res) => res.json({ message: 'ok' }));
 
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password, role = 'student' } = req.body;
@@ -391,9 +423,9 @@ app.get('/api/submissions/:id', auth, (req, res) => {
 });
 
 app.post('/api/submissions', auth, allow('student', 'admin'), (req, res) => {
-  const { courseId, lessonId, content = '', fileUrl = '' } = req.body;
-  const safeContent = typeof content === 'string' ? content : '';
-  const safeFileUrl = typeof fileUrl === 'string' ? fileUrl : '';
+  const courseId = req.body.courseId ?? req.body.course_id;
+  const lessonId = req.body.lessonId ?? req.body.lesson_id;
+  const { content: safeContent, fileUrl: safeFileUrl } = normalizeSubmissionPayload(req.body);
   if (!courseId || !lessonId) return res.status(400).json({ message: 'courseId and lessonId are required' });
   if (!db.lessons.some((lesson) => lesson.id === lessonId && lesson.courseId === courseId)) {
     return res.status(400).json({ message: 'lessonId must belong to courseId' });
@@ -401,22 +433,32 @@ app.post('/api/submissions', auth, allow('student', 'admin'), (req, res) => {
   if (!canAccessCourse(req.user, courseId)) return res.status(403).json({ message: 'Forbidden' });
   if (!safeContent.trim() && !safeFileUrl.trim()) return res.status(400).json({ message: 'content OR fileUrl is required' });
 
-  const item = {
-    id: genId('sb'),
-    courseId,
-    lessonId,
-    userId: req.user.id,
-    content: safeContent,
-    fileUrl: safeFileUrl,
-    status: 'submitted',
-    grade: null,
-    feedback: '',
-    createdAt: new Date().toISOString(),
-  };
+  const lockKey = `submission:create:${req.user.id}:${courseId}:${lessonId}`;
+  return withRequestLock(
+    lockKey,
+    () => res.status(409).json({ message: 'Duplicate submission request in progress' }),
+    () => {
+      const duplicate = db.submissions.find((submission) => submission.userId === req.user.id && submission.courseId === courseId && submission.lessonId === lessonId && submission.status === 'submitted');
+      if (duplicate) return res.status(409).json({ message: 'Submission already exists for this assignment', item: duplicate });
 
-  db.submissions.push(item);
-  persist();
-  res.status(201).json({ item });
+      const item = {
+        id: genId('sb'),
+        courseId,
+        lessonId,
+        userId: req.user.id,
+        content: safeContent,
+        fileUrl: safeFileUrl,
+        status: 'submitted',
+        grade: null,
+        feedback: '',
+        createdAt: new Date().toISOString(),
+      };
+
+      db.submissions.push(item);
+      persist();
+      return res.status(201).json({ item });
+    }
+  );
 });
 
 app.put('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) => {
@@ -426,9 +468,7 @@ app.put('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) => {
   if (item.status !== 'submitted') return res.status(400).json({ message: 'Only submitted records can be edited' });
   if (req.user.role === 'student' && item.userId !== req.user.id) return res.status(403).json({ message: 'Forbidden' });
 
-  const { content = '', fileUrl = '' } = req.body;
-  const safeContent = typeof content === 'string' ? content : '';
-  const safeFileUrl = typeof fileUrl === 'string' ? fileUrl : '';
+  const { content: safeContent, fileUrl: safeFileUrl } = normalizeSubmissionPayload(req.body);
   if (!safeContent.trim() && !safeFileUrl.trim()) return res.status(400).json({ message: 'content OR fileUrl is required' });
 
   item.content = safeContent;
@@ -560,24 +600,31 @@ app.post('/api/exams/:examId/start', auth, allow('student'), (req, res) => {
 
   const variant = db.examVariants.find((entry) => entry.examId === exam.id);
   if (!variant) return res.status(404).json({ message: 'No variant' });
-  const ongoingAttempt = db.examAttempts.find((entry) => entry.examId === exam.id && entry.userId === req.user.id && entry.status === 'started');
-  if (ongoingAttempt) return res.status(409).json({ message: 'Exam already started', attemptId: ongoingAttempt.id });
+  const lockKey = `exam:start:${exam.id}:${req.user.id}`;
+  return withRequestLock(
+    lockKey,
+    () => res.status(409).json({ message: 'Exam start already in progress' }),
+    () => {
+      const ongoingAttempt = db.examAttempts.find((entry) => entry.examId === exam.id && entry.userId === req.user.id && entry.status === 'started');
+      if (ongoingAttempt) return res.status(409).json({ message: 'Exam already started', attemptId: ongoingAttempt.id, item: ongoingAttempt });
 
-  const attempt = {
-    id: genId('atp'),
-    examId: exam.id,
-    userId: req.user.id,
-    variantId: variant.id,
-    answers: {},
-    status: 'started',
-    score: null,
-    startedAt: new Date().toISOString(),
-    finishedAt: null,
-  };
+      const attempt = {
+        id: genId('atp'),
+        examId: exam.id,
+        userId: req.user.id,
+        variantId: variant.id,
+        answers: {},
+        status: 'started',
+        score: null,
+        startedAt: new Date().toISOString(),
+        finishedAt: null,
+      };
 
-  db.examAttempts.push(attempt);
-  persist();
-  res.status(201).json({ item: attempt });
+      db.examAttempts.push(attempt);
+      persist();
+      return res.status(201).json({ item: attempt });
+    }
+  );
 });
 
 app.get('/api/exam-attempts/:id/questions', auth, (req, res) => {
@@ -586,15 +633,7 @@ app.get('/api/exam-attempts/:id/questions', auth, (req, res) => {
   const exam = db.exams.find((entry) => entry.id === attempt.examId);
   if (!exam || !canAccessCourse(req.user, exam.courseId)) return res.status(403).json({ message: 'Forbidden' });
   if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
-  const startedAtMs = new Date(attempt.startedAt).getTime();
-  const expiresAt = startedAtMs + ((Number(exam?.durationMinutes) || 30) * 60 * 1000);
-  if (Date.now() > expiresAt) {
-    attempt.status = 'finished';
-    attempt.score = 0;
-    attempt.finishedAt = new Date().toISOString();
-    persist();
-    return res.status(400).json({ message: 'Exam attempt has expired' });
-  }
+  if (ensureAttemptNotExpired(attempt, exam)) return res.status(400).json({ message: 'Exam attempt has expired' });
   const items = db.examQuestions
     .filter((q) => q.variantId === attempt.variantId)
     .map((q) => ({ id: q.id, text: q.text, options: q.options }));
@@ -606,8 +645,7 @@ app.post('/api/exam-attempts/:id/answers', auth, allow('student'), (req, res) =>
   if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
   if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
   const exam = db.exams.find((entry) => entry.id === attempt.examId);
-  const expiresAt = new Date(attempt.startedAt).getTime() + ((Number(exam?.durationMinutes) || 30) * 60 * 1000);
-  if (Date.now() > expiresAt) return res.status(400).json({ message: 'Exam attempt has expired' });
+  if (ensureAttemptNotExpired(attempt, exam)) return res.status(400).json({ message: 'Exam attempt has expired' });
 
   const answers = req.body.answers || {};
   attempt.answers = { ...attempt.answers, ...answers };
@@ -616,38 +654,50 @@ app.post('/api/exam-attempts/:id/answers', auth, allow('student'), (req, res) =>
 });
 
 app.post('/api/exam-attempts/:id/finish', auth, allow('student'), (req, res) => {
-  const attempt = db.examAttempts.find((entry) => entry.id === req.params.id && entry.userId === req.user.id);
-  if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
-  if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
-  const exam = db.exams.find((entry) => entry.id === attempt.examId);
-  const expiresAt = new Date(attempt.startedAt).getTime() + ((Number(exam?.durationMinutes) || 30) * 60 * 1000);
-  if (Date.now() > expiresAt) return res.status(400).json({ message: 'Exam attempt has expired' });
+  const lockKey = `exam:finish:${req.params.id}:${req.user.id}`;
+  return withRequestLock(
+    lockKey,
+    () => res.status(409).json({ message: 'Exam finish already in progress' }),
+    () => {
+      const attempt = db.examAttempts.find((entry) => entry.id === req.params.id && entry.userId === req.user.id);
+      if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+      if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
+      const exam = db.exams.find((entry) => entry.id === attempt.examId);
+      if (ensureAttemptNotExpired(attempt, exam)) return res.status(400).json({ message: 'Exam attempt has expired' });
 
-  const qs = db.examQuestions.filter((q) => q.variantId === attempt.variantId);
-  const correct = qs.filter((q) => attempt.answers[q.id] === q.correctAnswer).length;
-  attempt.score = qs.length ? Math.round((correct / qs.length) * 100) : 0;
-  attempt.status = 'finished';
-  attempt.finishedAt = new Date().toISOString();
-  persist();
-  res.json({ item: attempt });
+      const qs = db.examQuestions.filter((q) => q.variantId === attempt.variantId);
+      const correct = qs.filter((q) => attempt.answers[q.id] === q.correctAnswer).length;
+      attempt.score = qs.length ? Math.round((correct / qs.length) * 100) : 0;
+      attempt.status = 'finished';
+      attempt.finishedAt = new Date().toISOString();
+      persist();
+      return res.json({ item: attempt });
+    }
+  );
 });
 
 app.post('/api/exam-attempts/:id/submit', auth, allow('student'), (req, res) => {
-  const attempt = db.examAttempts.find((entry) => entry.id === req.params.id && entry.userId === req.user.id);
-  if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
-  if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
-  const exam = db.exams.find((entry) => entry.id === attempt.examId);
-  const expiresAt = new Date(attempt.startedAt).getTime() + ((Number(exam?.durationMinutes) || 30) * 60 * 1000);
-  if (Date.now() > expiresAt) return res.status(400).json({ message: 'Exam attempt has expired' });
+  const lockKey = `exam:submit:${req.params.id}:${req.user.id}`;
+  return withRequestLock(
+    lockKey,
+    () => res.status(409).json({ message: 'Exam submit already in progress' }),
+    () => {
+      const attempt = db.examAttempts.find((entry) => entry.id === req.params.id && entry.userId === req.user.id);
+      if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
+      if (attempt.status !== 'started') return res.status(400).json({ message: 'Attempt already finished' });
+      const exam = db.exams.find((entry) => entry.id === attempt.examId);
+      if (ensureAttemptNotExpired(attempt, exam)) return res.status(400).json({ message: 'Exam attempt has expired' });
 
-  attempt.answers = req.body.answers || {};
-  const qs = db.examQuestions.filter((q) => q.variantId === attempt.variantId);
-  const correct = qs.filter((q) => attempt.answers[q.id] === q.correctAnswer).length;
-  attempt.score = qs.length ? Math.round((correct / qs.length) * 100) : 0;
-  attempt.status = 'finished';
-  attempt.finishedAt = new Date().toISOString();
-  persist();
-  res.json({ item: attempt });
+      attempt.answers = req.body.answers || {};
+      const qs = db.examQuestions.filter((q) => q.variantId === attempt.variantId);
+      const correct = qs.filter((q) => attempt.answers[q.id] === q.correctAnswer).length;
+      attempt.score = qs.length ? Math.round((correct / qs.length) * 100) : 0;
+      attempt.status = 'finished';
+      attempt.finishedAt = new Date().toISOString();
+      persist();
+      return res.json({ item: attempt });
+    }
+  );
 });
 
 app.get('/api/exam-attempts/:id/result', auth, (req, res) => {
@@ -655,6 +705,7 @@ app.get('/api/exam-attempts/:id/result', auth, (req, res) => {
   if (!attempt) return res.status(404).json({ message: 'Attempt not found' });
   const exam = db.exams.find((entry) => entry.id === attempt.examId);
   if (!exam || !canAccessCourse(req.user, exam.courseId)) return res.status(403).json({ message: 'Forbidden' });
+  ensureAttemptNotExpired(attempt, exam);
   res.json({ item: attempt });
 });
 
@@ -702,14 +753,22 @@ app.post('/api/leave-requests', auth, allow('student'), (req, res) => {
   const { reason, date, courseId } = req.body;
   if (!reason || !date || !courseId) return res.status(400).json({ message: 'reason, date, courseId are required' });
   if (!canAccessCourse(req.user, courseId)) return res.status(403).json({ message: 'Forbidden' });
-  if (db.leaveRequests.some((request) => request.userId === req.user.id && request.courseId === courseId && request.date === date && request.status === 'pending')) {
-    return res.status(409).json({ message: 'Duplicate leave request for this session' });
-  }
 
-  const item = { id: genId('lr'), userId: req.user.id, reason, date, courseId, status: 'pending' };
-  db.leaveRequests.push(item);
-  persist();
-  res.status(201).json({ item });
+  const lockKey = `leave:create:${req.user.id}:${courseId}:${date}`;
+  return withRequestLock(
+    lockKey,
+    () => res.status(409).json({ message: 'Duplicate leave request in progress' }),
+    () => {
+      if (db.leaveRequests.some((request) => request.userId === req.user.id && request.courseId === courseId && request.date === date && request.status === 'pending')) {
+        return res.status(409).json({ message: 'Duplicate leave request for this session' });
+      }
+
+      const item = { id: genId('lr'), userId: req.user.id, reason, date, courseId, status: 'pending' };
+      db.leaveRequests.push(item);
+      persist();
+      return res.status(201).json({ item });
+    }
+  );
 });
 
 app.post('/api/leave-requests/:id/approve', auth, allow('teacher', 'admin'), (req, res) => {

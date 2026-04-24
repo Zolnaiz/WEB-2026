@@ -17,6 +17,7 @@ export default function ExamsPage() {
   const [attempt, setAttempt] = useState(null);
   const [attemptQuestions, setAttemptQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
+  const [busyAction, setBusyAction] = useState('');
 
   const [createExamForm, setCreateExamForm] = useState({ courseId: 'c-1', title: '', durationMinutes: 30 });
   const [createVariantForm, setCreateVariantForm] = useState({ examId: 'e-1', title: '' });
@@ -51,6 +52,8 @@ export default function ExamsPage() {
 
   const createExam = async (event) => {
     event.preventDefault();
+    if (busyAction) return;
+    setBusyAction('createExam');
     try {
       await api.post('/exams', { ...createExamForm, durationMinutes: Number(createExamForm.durationMinutes) || 30 });
       pushToast('Exam created', 'success');
@@ -58,11 +61,15 @@ export default function ExamsPage() {
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const createVariant = async (event) => {
     event.preventDefault();
+    if (busyAction) return;
+    setBusyAction('createVariant');
     try {
       await api.post('/exam-variants', createVariantForm);
       pushToast('Variant created', 'success');
@@ -70,11 +77,15 @@ export default function ExamsPage() {
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const createQuestion = async (event) => {
     event.preventDefault();
+    if (busyAction) return;
+    setBusyAction('createQuestion');
     try {
       const options = createQuestionForm.optionsText.split(',').map((item) => item.trim()).filter(Boolean);
       await api.post('/exam-questions', {
@@ -88,10 +99,14 @@ export default function ExamsPage() {
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const start = async (examId) => {
+    if (busyAction) return;
+    setBusyAction(`start:${examId}`);
     try {
       const started = await api.post(`/exams/${examId}/start`, {});
       setAttempt(started.item);
@@ -101,21 +116,29 @@ export default function ExamsPage() {
       pushToast('Exam started', 'success');
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const saveAnswers = async () => {
     if (!attempt) return;
+    if (busyAction) return;
+    setBusyAction('saveAnswers');
     try {
       await api.post(`/exam-attempts/${attempt.id}/answers`, { answers });
       pushToast('Answers saved', 'success');
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const finish = async () => {
     if (!attempt) return;
+    if (busyAction) return;
+    setBusyAction('finish');
     try {
       await api.post(`/exam-attempts/${attempt.id}/answers`, { answers });
       const done = await api.post(`/exam-attempts/${attempt.id}/finish`, {});
@@ -124,6 +147,8 @@ export default function ExamsPage() {
       setAttempt(result.item);
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -141,14 +166,14 @@ export default function ExamsPage() {
             <input className="w-full rounded border px-2 py-1" placeholder="courseId" value={createExamForm.courseId} onChange={(e) => setCreateExamForm({ ...createExamForm, courseId: e.target.value })} required />
             <input className="w-full rounded border px-2 py-1" placeholder="title" value={createExamForm.title} onChange={(e) => setCreateExamForm({ ...createExamForm, title: e.target.value })} required />
             <input className="w-full rounded border px-2 py-1" type="number" min="1" placeholder="durationMinutes" value={createExamForm.durationMinutes} onChange={(e) => setCreateExamForm({ ...createExamForm, durationMinutes: e.target.value })} />
-            <button className="rounded bg-indigo-600 px-3 py-1 text-white">Create</button>
+            <button disabled={!!busyAction} className="rounded bg-indigo-600 px-3 py-1 text-white disabled:opacity-60">Create</button>
           </form>
 
           <form className="rounded border bg-white p-3 space-y-2" onSubmit={createVariant}>
             <h3 className="font-semibold">Create Variant</h3>
             <input className="w-full rounded border px-2 py-1" placeholder="examId" value={createVariantForm.examId} onChange={(e) => setCreateVariantForm({ ...createVariantForm, examId: e.target.value })} required />
             <input className="w-full rounded border px-2 py-1" placeholder="title" value={createVariantForm.title} onChange={(e) => setCreateVariantForm({ ...createVariantForm, title: e.target.value })} required />
-            <button className="rounded bg-indigo-600 px-3 py-1 text-white">Create</button>
+            <button disabled={!!busyAction} className="rounded bg-indigo-600 px-3 py-1 text-white disabled:opacity-60">Create</button>
           </form>
 
           <form className="rounded border bg-white p-3 space-y-2" onSubmit={createQuestion}>
@@ -157,7 +182,7 @@ export default function ExamsPage() {
             <input className="w-full rounded border px-2 py-1" placeholder="question text" value={createQuestionForm.text} onChange={(e) => setCreateQuestionForm({ ...createQuestionForm, text: e.target.value })} required />
             <input className="w-full rounded border px-2 py-1" placeholder="options comma-separated" value={createQuestionForm.optionsText} onChange={(e) => setCreateQuestionForm({ ...createQuestionForm, optionsText: e.target.value })} required />
             <input className="w-full rounded border px-2 py-1" placeholder="correct answer" value={createQuestionForm.correctAnswer} onChange={(e) => setCreateQuestionForm({ ...createQuestionForm, correctAnswer: e.target.value })} required />
-            <button className="rounded bg-indigo-600 px-3 py-1 text-white">Create</button>
+            <button disabled={!!busyAction} className="rounded bg-indigo-600 px-3 py-1 text-white disabled:opacity-60">Create</button>
           </form>
         </div>
       )}
@@ -171,7 +196,7 @@ export default function ExamsPage() {
               <div className="font-medium">{exam.title}</div>
               <div className="text-xs text-slate-600">Exam: {exam.id} | Course: {exam.courseId} | Duration: {exam.durationMinutes}m</div>
               <div className="text-xs text-slate-500">Variants: {(variantsByExam[exam.id] || []).map((v) => v.id).join(', ') || 'none'}</div>
-              {role === 'student' && <button className="mt-2 rounded bg-emerald-600 px-2 py-1 text-white" onClick={() => start(exam.id)}>Start Exam</button>}
+              {role === 'student' && <button disabled={!!busyAction} className="mt-2 rounded bg-emerald-600 px-2 py-1 text-white disabled:opacity-60" onClick={() => start(exam.id)}>Start Exam</button>}
             </div>
           ))}
         </div>
@@ -195,8 +220,8 @@ export default function ExamsPage() {
               ))}
               {attempt.status === 'started' ? (
                 <div className="space-x-2">
-                  <button className="rounded bg-slate-600 px-3 py-1 text-white" onClick={saveAnswers}>Save</button>
-                  <button className="rounded bg-indigo-600 px-3 py-1 text-white" onClick={finish}>Finish Exam</button>
+                  <button disabled={!!busyAction} className="rounded bg-slate-600 px-3 py-1 text-white disabled:opacity-60" onClick={saveAnswers}>Save</button>
+                  <button disabled={!!busyAction} className="rounded bg-indigo-600 px-3 py-1 text-white disabled:opacity-60" onClick={finish}>Finish Exam</button>
                 </div>
               ) : (
                 <p className="text-sm text-emerald-700">Final score: {attempt.score}</p>

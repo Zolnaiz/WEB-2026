@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api, clearToken, getToken, setToken } from '../services/apiClient';
+import { api, clearSession, getToken, setToken } from '../services/apiClient';
 
 const AuthContext = createContext(null);
 const USER_KEY = import.meta.env.VITE_AUTH_USER_KEY || 'lms_auth_user';
@@ -13,6 +13,19 @@ export function AuthProvider({ children }) {
     if (!token) return;
     api.get('/auth/me').then((r) => setUser(r.user)).catch(() => logout());
   }, [token]);
+
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      const nextToken = getToken();
+      const nextUser = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+      setTokenState(nextToken);
+      setUser(nextUser);
+    };
+
+    window.addEventListener('auth:changed', syncAuthState);
+    return () => window.removeEventListener('auth:changed', syncAuthState);
+  }, []);
 
   const login = async (email, password) => {
     setLoading(true);
@@ -46,8 +59,7 @@ export function AuthProvider({ children }) {
     } catch {
       // ignore logout API failures for stateless JWT sessions
     } finally {
-      clearToken();
-      localStorage.removeItem(USER_KEY);
+      clearSession();
       setTokenState(null);
       setUser(null);
     }

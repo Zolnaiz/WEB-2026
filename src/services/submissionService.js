@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { api } from './apiClient';
 
 const SUBMISSIONS_ENDPOINT = import.meta.env.VITE_SUBMISSIONS_ENDPOINT || '/submissions';
 
@@ -14,25 +14,32 @@ function toQueryString(params = {}) {
 }
 
 export function getSubmissions(params = {}) {
-  return apiClient.get(`${SUBMISSIONS_ENDPOINT}${toQueryString(params)}`);
+  return api.get(`${SUBMISSIONS_ENDPOINT}${toQueryString(params)}`);
 }
 
 export function getLessonSubmissions(course_id, lesson_id, options = {}) {
-  return getSubmissions({ course_id, lesson_id, ...options });
+  return getSubmissions({ courseId: course_id, lessonId: lesson_id, ...options });
 }
 
 export function getSubmission(id) {
-  return apiClient.get(`${SUBMISSIONS_ENDPOINT}/${id}`);
+  return api.get(`${SUBMISSIONS_ENDPOINT}/${id}`);
 }
 
 export function createSubmission(data) {
-  return apiClient.post(SUBMISSIONS_ENDPOINT, data);
+  const normalized = {
+    ...data,
+    courseId: data.courseId ?? data.course_id,
+    lessonId: data.lessonId ?? data.lesson_id,
+    fileUrl: data.fileUrl ?? data.file_url,
+  };
+  return api.post(SUBMISSIONS_ENDPOINT, normalized);
 }
 
 export function updateSubmission(id, data) {
-  return apiClient.put(`${SUBMISSIONS_ENDPOINT}/${id}`, data);
+  const normalized = { ...data, fileUrl: data.fileUrl ?? data.file_url };
+  return api.put(`${SUBMISSIONS_ENDPOINT}/${id}`, normalized);
 }
 
 export function gradeSubmission(id, data) {
-  return apiClient.post(`${SUBMISSIONS_ENDPOINT}/${id}/grade`, data);
+  return api.post(`${SUBMISSIONS_ENDPOINT}/${id}/grade`, data);
 }

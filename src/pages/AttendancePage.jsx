@@ -12,6 +12,7 @@ export default function AttendancePage() {
   const [error, setError] = useState('');
   const [record, setRecord] = useState({ userId: 'u-student', courseId: 'c-1', date: new Date().toISOString().slice(0, 10), type: 'present' });
   const [leaveForm, setLeaveForm] = useState({ reason: '', date: new Date().toISOString().slice(0, 10), courseId: 'c-1' });
+  const [busyAction, setBusyAction] = useState('');
 
   const load = async () => {
     setLoading(true);
@@ -31,17 +32,23 @@ export default function AttendancePage() {
 
   const mark = async (event) => {
     event.preventDefault();
+    if (busyAction) return;
+    setBusyAction('mark');
     try {
       await api.post('/attendance', record);
       pushToast('Attendance marked', 'success');
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const requestLeave = async (event) => {
     event.preventDefault();
+    if (busyAction) return;
+    setBusyAction('leave');
     try {
       await api.post('/leave-requests', leaveForm);
       pushToast('Leave requested', 'success');
@@ -49,16 +56,22 @@ export default function AttendancePage() {
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const approve = async (id, status) => {
+    if (busyAction) return;
+    setBusyAction(`approve:${id}:${status}`);
     try {
       await api.post(`/leave-requests/${id}/approve`, { status });
       pushToast('Leave updated', 'success');
       await load();
     } catch (err) {
       pushToast(err.message, 'error');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -78,7 +91,7 @@ export default function AttendancePage() {
             <option>absent</option>
             <option>leave</option>
           </select>
-          <button className="rounded bg-indigo-600 px-2 text-white">Track</button>
+          <button disabled={!!busyAction} className="rounded bg-indigo-600 px-2 text-white disabled:opacity-60">Track</button>
         </form>
       )}
 
@@ -87,7 +100,7 @@ export default function AttendancePage() {
           <input className="rounded border px-2 py-1" placeholder="courseId" value={leaveForm.courseId} onChange={(e) => setLeaveForm({ ...leaveForm, courseId: e.target.value })} required />
           <input className="rounded border px-2 py-1" type="date" value={leaveForm.date} onChange={(e) => setLeaveForm({ ...leaveForm, date: e.target.value })} required />
           <input className="min-w-72 flex-1 rounded border px-2 py-1" value={leaveForm.reason} onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })} placeholder="Leave reason" required />
-          <button className="rounded bg-emerald-600 px-2 text-white">Request Leave</button>
+          <button disabled={!!busyAction} className="rounded bg-emerald-600 px-2 text-white disabled:opacity-60">Request Leave</button>
         </form>
       )}
 
@@ -103,8 +116,8 @@ export default function AttendancePage() {
             <span>{item.userId} - {item.courseId} - {item.reason} - {item.status}</span>
             {['teacher', 'admin'].includes(role) && (
               <span className="space-x-2">
-                <button className="text-green-700" onClick={() => approve(item.id, 'approved')}>Approve</button>
-                <button className="text-red-700" onClick={() => approve(item.id, 'rejected')}>Reject</button>
+                <button disabled={!!busyAction} className="text-green-700 disabled:opacity-60" onClick={() => approve(item.id, 'approved')}>Approve</button>
+                <button disabled={!!busyAction} className="text-red-700 disabled:opacity-60" onClick={() => approve(item.id, 'rejected')}>Reject</button>
               </span>
             )}
           </div>
