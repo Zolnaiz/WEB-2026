@@ -1,67 +1,81 @@
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { api } from '../services/apiClient';
 
-const SAMPLE_FALLBACK = [{ info: 'Offline/sample fallback data' }];
-
-function toApiPath(pathname) {
-  return pathname.replace(/\/(create|edit)$/,'').replace(/^\//, '/');
-}
+const routeConfig = {
+  '/roles': { title: 'Roles', endpoint: '/roles' },
+  '/school': { title: 'School', endpoint: '/school' },
+  '/profile': { title: 'Profile', endpoint: '/profile' },
+  '/profile/change-password': { title: 'Change Password', endpoint: '/profile/change-password', form: true },
+  '/grade': { title: 'Grade', endpoint: '/grade' },
+  '/question-types': { title: 'Question Types', endpoint: '/question-types' },
+  '/question-levels': { title: 'Question Levels', endpoint: '/question-levels' },
+};
 
 export default function ApiModulePage() {
   const location = useLocation();
-  const [loading, setLoading] = useState(true);
+  const config = routeConfig[location.pathname] || { title: 'API Module', endpoint: location.pathname };
+  const [data, setData] = useState(null);
   const [error, setError] = useState('');
-  const [payload, setPayload] = useState(null);
-  const apiPath = toApiPath(location.pathname);
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({ oldPassword: '', newPassword: '' });
 
-  useEffect(() => {
-    let active = true;
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      try {
-        const result = await api.get(apiPath);
-        if (!active) return;
-        setPayload(result);
-      } catch (e) {
-        if (!active) return;
-        setError(e.message);
-        setPayload({ items: SAMPLE_FALLBACK });
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    load();
-    return () => { active = false; };
-  }, [apiPath]);
+  const load = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get(config.endpoint);
+      setData(res);
+    } catch (err) {
+      setError(`${err.message} (status: ${err.status ?? 'n/a'}, endpoint: ${err.endpoint ?? config.endpoint})`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const title = location.pathname;
-  const rows = payload?.items || (payload?.item ? [payload.item] : []);
+  const rows = useMemo(() => {
+    const items = data?.items || (data?.item ? [data.item] : []);
+    return Array.isArray(items) ? items : [];
+  }, [data]);
+
+  const keys = useMemo(() => Array.from(new Set(rows.flatMap((row) => Object.keys(row || {})))), [rows]);
 
   return (
-    <section className="space-y-4">
-      <h2 className="text-xl font-semibold">{title}</h2>
-      {loading && <div className="text-sm">Loading...</div>}
-      {!loading && error && <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">API unavailable: {error}. Showing sample data fallback.</div>}
-      {!loading && rows.length === 0 && <div className="text-sm text-slate-500">No data.</div>}
-      {!loading && rows.length > 0 && (
+    <section className="space-y-3">
+      <h2 className="text-xl font-semibold">{config.title}</h2>
+      {!config.form && <button className="rounded bg-indigo-600 px-3 py-1 text-white" onClick={load}>Load</button>}
+      {error && <div className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</div>}
+      {loading && <div className="text-sm text-slate-500">Loading...</div>}
+
+      {config.form && (
+        <form
+          className="max-w-md space-y-2 rounded border bg-white p-3"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setError('');
+            try {
+              await api.put('/profile/change-password', form);
+              setForm({ oldPassword: '', newPassword: '' });
+            } catch (err) {
+              setError(`${err.message} (status: ${err.status ?? 'n/a'}, endpoint: ${err.endpoint ?? '/profile/change-password'})`);
+            }
+          }}
+        >
+          <input type="password" className="w-full rounded border px-2 py-1" placeholder="Old password" value={form.oldPassword} onChange={(e) => setForm({ ...form, oldPassword: e.target.value })} required />
+          <input type="password" className="w-full rounded border px-2 py-1" placeholder="New password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} required />
+          <button className="rounded bg-indigo-600 px-3 py-1 text-white">Change Password</button>
+        </form>
+      )}
+
+      {!config.form && rows.length > 0 && (
         <div className="overflow-auto rounded border bg-white">
           <table className="w-full text-sm">
             <thead>
-              <tr>
-                {Object.keys(rows[0]).map((key) => (
-                  <th key={key} className="border-b p-2 text-left">{key}</th>
-                ))}
-              </tr>
+              <tr>{keys.map((key) => <th key={key} className="border-b p-2 text-left">{key}</th>)}</tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr key={row.id || index}>
-                  {Object.keys(rows[0]).map((key) => (
-                    <td key={key} className="border-b p-2">{String(row[key] ?? '')}</td>
-                  ))}
-                </tr>
+              {rows.map((row, idx) => (
+                <tr key={row.id || idx}>{keys.map((key) => <td className="border-b p-2" key={key}>{typeof row[key] === 'object' ? JSON.stringify(row[key]) : String(row[key] ?? '')}</td>)}</tr>
               ))}
             </tbody>
           </table>
