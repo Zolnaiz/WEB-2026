@@ -21,7 +21,13 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     clearToken();
     if (window.location.pathname !== '/login') window.location.href = '/login';
   }
-  if (!res.ok) throw new Error(data?.message || `HTTP ${res.status}`);
+  if (res.status === 403 && window.location.pathname !== '/403') {
+    window.location.href = '/403';
+  }
+  if (!res.ok || (data && data.success === false)) throw new Error(data?.message || `HTTP ${res.status}`);
+  if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'success')) {
+    return data.data ?? null;
+  }
   return data;
 }
 
