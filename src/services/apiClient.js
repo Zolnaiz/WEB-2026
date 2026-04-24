@@ -1,9 +1,19 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 const TOKEN_KEY = import.meta.env.VITE_AUTH_TOKEN_KEY || 'lms_access_token';
+const USER_KEY = import.meta.env.VITE_AUTH_USER_KEY || 'lms_auth_user';
+
+function emitAuthChange(eventType) {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('auth:changed', { detail: { type: eventType } }));
+}
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
-export const clearToken = () => localStorage.removeItem(TOKEN_KEY);
+export const setToken = (t) => { localStorage.setItem(TOKEN_KEY, t); emitAuthChange('token:set'); };
+export const clearSession = () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  emitAuthChange('session:cleared');
+};
+export const clearToken = () => clearSession();
 
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const token = getToken();
@@ -16,9 +26,16 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
   if (res.status === 401) {
-    clearToken();
+    clearSession();
     if (window.location.pathname !== '/login') window.location.href = '/login';
   }
   if (res.status === 403 && window.location.pathname !== '/403') {
