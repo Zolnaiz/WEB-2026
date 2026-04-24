@@ -34,7 +34,7 @@
       "id": "c-1",
       "title": "Web Engineering",
       "description": "Core LMS demo course",
-      "teacherId": "u-teacher",
+      "teacherId": "u-schoolteacher",
       "groupIds": [
         "g-1"
       ],
@@ -57,7 +57,7 @@
       "courseId": "c-1",
       "name": "Group A",
       "userIds": [
-        "u-student"
+        "u-schoolstudent"
       ]
     }
   ],
@@ -156,5 +156,30 @@
     }
   ],
   "attendanceRecords": [],
-  "leaveRequests": []
+  "leaveRequests": [],
+  "schools": [
+    {
+      "id": "s-1",
+      "name": "MUST School of IT",
+      "adminUserId": "u-schooladmin"
+    }
+  ],
+  "roles": [
+    {
+      "id": "r-admin",
+      "code": "admin"
+    },
+    {
+      "id": "r-schooladmin",
+      "code": "schooladmin"
+    },
+    {
+      "id": "r-teacher",
+      "code": "teacher"
+    },
+    {
+      "id": "r-student",
+      "code": "student"
+    }
+  ]
 }

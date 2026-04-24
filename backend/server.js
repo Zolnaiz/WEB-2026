@@ -16,6 +16,43 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const hashPassword = (password) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${hash}`;
+};
+const verifyPassword = (password, passwordHash) => {
+  if (!passwordHash) return false;
+  if (passwordHash.startsWith('scrypt$')) {
+    const [, salt, originalHash] = passwordHash.split('$');
+    if (!salt || !originalHash) return false;
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
+  }
+  return password === passwordHash;
+};
+
+function ensureDefaultUsers(users = []) {
+  const defaults = [
+    { id: 'u-admin', name: 'Main Admin', email: 'admin@must.edu.mn', role: 'admin' },
+    { id: 'u-schooladmin', name: 'School Admin', email: 'schooladmin@must.edu.mn', role: 'schooladmin' },
+    { id: 'u-schoolteacher', name: 'School Teacher', email: 'schoolteacher@must.edu.mn', role: 'teacher' },
+    { id: 'u-schoolstudent', name: 'School Student', email: 'schoolstudent@must.edu.mn', role: 'student' },
+  ];
+  const next = [...users];
+  defaults.forEach((requiredUser) => {
+    const idx = next.findIndex((u) => u.email === requiredUser.email);
+    const passwordHash = hashPassword('123');
+    if (idx < 0) {
+      next.push({ ...requiredUser, passwordHash });
+      return;
+    }
+    next[idx] = { ...next[idx], ...requiredUser, passwordHash: next[idx].passwordHash || passwordHash };
+    delete next[idx].password;
+  });
+  return next;
+}
+
 app.use((req, res, next) => {
   const originalJson = res.json.bind(res);
   res.json = (payload) => {
@@ -37,14 +74,12 @@ function readData() {
   if (!fs.existsSync(DATA_FILE)) {
     const now = new Date().toISOString();
     const seed = {
-      users: [
-        { id: 'u-admin', name: 'Admin User', email: 'admin@lms.com', password: 'admin123', role: 'admin' },
-        { id: 'u-teacher', name: 'Teacher User', email: 'teacher@lms.com', password: 'teacher123', role: 'teacher' },
-        { id: 'u-student', name: 'Student User', email: 'student@lms.com', password: 'student123', role: 'student' },
-      ],
-      courses: [{ id: 'c-1', title: 'Web Engineering', description: 'Core LMS demo course', teacherId: 'u-teacher', groupIds: ['g-1'], createdAt: now }],
+      users: ensureDefaultUsers([]),
+      schools: [{ id: 's-1', name: 'MUST School of IT', adminUserId: 'u-schooladmin' }],
+      roles: [{ id: 'r-admin', code: 'admin' }, { id: 'r-schooladmin', code: 'schooladmin' }, { id: 'r-teacher', code: 'teacher' }, { id: 'r-student', code: 'student' }],
+      courses: [{ id: 'c-1', title: 'Web Engineering', description: 'Core LMS demo course', teacherId: 'u-schoolteacher', groupIds: ['g-1'], createdAt: now }],
       lessons: [{ id: 'l-1', courseId: 'c-1', title: 'Lesson 1', type: 'assignment', parentId: null, content: 'Build LMS module' }],
-      groups: [{ id: 'g-1', courseId: 'c-1', name: 'Group A', userIds: ['u-student'] }],
+      groups: [{ id: 'g-1', courseId: 'c-1', name: 'Group A', userIds: ['u-schoolstudent'] }],
       submissions: [],
       exams: [{ id: 'e-1', courseId: 'c-1', title: 'Midterm', durationMinutes: 30 }],
       examVariants: [{ id: 'v-1', examId: 'e-1', title: 'Variant A' }],
@@ -59,6 +94,9 @@ function readData() {
 
   const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
   parsed.users ||= [];
+  parsed.users = ensureDefaultUsers(parsed.users);
+  parsed.schools ||= [{ id: 's-1', name: 'MUST School of IT', adminUserId: 'u-schooladmin' }];
+  parsed.roles ||= [{ id: 'r-admin', code: 'admin' }, { id: 'r-schooladmin', code: 'schooladmin' }, { id: 'r-teacher', code: 'teacher' }, { id: 'r-student', code: 'student' }];
   parsed.courses ||= [];
   parsed.lessons ||= [];
   parsed.groups ||= [];
@@ -296,6 +334,31 @@ app.post('/api/auth/login', (req, res) => {
   res.status(200).json({ token, user: sanitizeUser(user) });
 });
 
+app.post('/api/auth/forgot-password', (req, res) => {
+  const email = String(req.body?.email || '').trim();
+  if (!email) return res.status(400).json({ message: 'email is required' });
+  const user = db.users.find((u) => u.email === email);
+  if (user) {
+    user.resetToken = crypto.randomUUID();
+    user.resetExpiresAt = Date.now() + (15 * 60 * 1000);
+    persist();
+  }
+  res.json({ message: 'If that account exists, a reset token was generated.', token: user?.resetToken || null });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ message: 'token and password are required' });
+  const user = db.users.find((u) => u.resetToken === token && Number(u.resetExpiresAt) > Date.now());
+  if (!user) return res.status(400).json({ message: 'Invalid or expired reset token' });
+  user.passwordHash = hashPassword(password);
+  delete user.password;
+  delete user.resetToken;
+  delete user.resetExpiresAt;
+  persist();
+  res.json({ message: 'Password reset successfully' });
+});
+
 app.post('/api/auth/logout', auth, (_req, res) => {
   res.status(200).json({ message: 'Logged out' });
 });
@@ -360,6 +423,7 @@ app.post('/api/users', auth, allow('admin', 'schooladmin'), (req, res) => {
   const { name, email, password, role } = req.body;
   if (!name || !email || !password || !role) return res.status(400).json({ message: 'name, email, password, role are required' });
   if (!ROLES.includes(role)) return res.status(400).json({ message: 'Invalid role' });
+  if (req.user.role === 'schooladmin' && ['admin', 'schooladmin'].includes(role)) return res.status(403).json({ message: 'Forbidden' });
   if (db.users.some((u) => u.email === email)) return res.status(400).json({ message: 'Email already exists' });
   const user = { id: genId('u'), name, email, passwordHash: hashPassword(password), role };
   db.users.push(user);
@@ -964,6 +1028,72 @@ app.post('/api/leave-requests/:id/approve', auth, allow('teacher', 'admin', 'sch
   item.status = status;
   item.reviewedBy = req.user.id;
   persist();
+  res.json({ item });
+});
+
+app.get('/api/grade', auth, (req, res) => {
+  const items = db.submissions.filter((s) => s.status === 'graded').map((s) => ({ id: s.id, courseId: s.courseId, lessonId: s.lessonId, userId: s.userId, grade: s.grade }));
+  res.json({ items });
+});
+
+app.get('/api/courses/:courseId/grade', auth, (req, res) => {
+  const items = db.submissions.filter((s) => s.courseId === req.params.courseId && s.status === 'graded');
+  res.json({ items });
+});
+
+app.get('/api/courses/:courseId/users', auth, (req, res) => {
+  const groups = db.groups.filter((g) => g.courseId === req.params.courseId);
+  const userIds = [...new Set(groups.flatMap((g) => g.userIds))];
+  const items = db.users.filter((u) => userIds.includes(u.id)).map(sanitizeUser);
+  res.json({ items });
+});
+app.get('/api/courses/:courseId/users/edit', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => res.json({ items: [] }));
+app.get('/api/courses/:courseId/groups/:groupId/users', auth, (req, res) => {
+  const group = db.groups.find((g) => g.id === req.params.groupId && g.courseId === req.params.courseId);
+  if (!group) return res.status(404).json({ message: 'Group not found' });
+  const items = db.users.filter((u) => group.userIds.includes(u.id)).map(sanitizeUser);
+  res.json({ items });
+});
+
+app.get('/api/question-types', auth, (_req, res) => res.json({ items: [{ id: 'qt-1', name: 'multiple_choice' }, { id: 'qt-2', name: 'essay' }] }));
+app.get('/api/question-levels', auth, (_req, res) => res.json({ items: [{ id: 'ql-1', name: 'easy' }, { id: 'ql-2', name: 'medium' }, { id: 'ql-3', name: 'hard' }] }));
+app.get('/api/courses/:courseId/questions', auth, (req, res) => {
+  const examIds = db.exams.filter((e) => e.courseId === req.params.courseId).map((e) => e.id);
+  const variantIds = db.examVariants.filter((v) => examIds.includes(v.examId)).map((v) => v.id);
+  res.json({ items: db.examQuestions.filter((q) => variantIds.includes(q.variantId)) });
+});
+app.get('/api/courses/:courseId/question-points', auth, (_req, res) => res.json({ items: [{ id: 'qp-default', points: 1 }] }));
+app.get('/api/courses/:courseId/questions/create', auth, allow('admin', 'teacher'), (_req, res) => res.json({ item: { canCreate: true } }));
+app.get('/api/courses/:courseId/questions/:questionId', auth, (req, res) => {
+  if (req.params.questionId === 'report') {
+    return res.json({ item: { courseId: req.params.courseId, questionCount: db.examQuestions.length } });
+  }
+  const item = db.examQuestions.find((q) => q.id === req.params.questionId);
+  if (!item) return res.status(404).json({ message: 'Question not found' });
+  res.json({ item });
+});
+app.get('/api/courses/:courseId/questions/:questionId/edit', auth, allow('admin', 'teacher'), (req, res) => {
+  const item = db.examQuestions.find((q) => q.id === req.params.questionId);
+  if (!item) return res.status(404).json({ message: 'Question not found' });
+  res.json({ item });
+});
+app.get('/api/courses/:courseId/questions/report', auth, (req, res) => res.json({ item: { courseId: req.params.courseId, questionCount: db.examQuestions.length } }));
+
+app.get('/api/course/:courseId/attendances', auth, (req, res) => res.json({ items: db.attendanceRecords.filter((a) => a.courseId === req.params.courseId) }));
+app.get('/api/course/:courseId/attendances/:lessonId', auth, (req, res) => res.json({ items: db.attendanceRecords.filter((a) => a.courseId === req.params.courseId && a.lessonId === req.params.lessonId) }));
+app.get('/api/course/:courseId/attendances/:lessonId/requests', auth, (req, res) => res.json({ items: db.leaveRequests.filter((r) => r.courseId === req.params.courseId && r.lessonId === req.params.lessonId) }));
+app.get('/api/course/:courseId/attendances/requests', auth, (req, res) => res.json({ items: db.leaveRequests.filter((r) => r.courseId === req.params.courseId) }));
+
+app.get('/api/exams/:examId/report', auth, (req, res) => {
+  const items = db.examAttempts.filter((a) => a.examId === req.params.examId);
+  res.json({ item: { examId: req.params.examId, totalAttempts: items.length, finished: items.filter((a) => a.status === 'finished').length } });
+});
+app.get('/api/exams/:examId/students/:studentId/check', auth, (req, res) => {
+  const item = db.examAttempts.find((a) => a.examId === req.params.examId && a.userId === req.params.studentId) || null;
+  res.json({ item });
+});
+app.get('/api/exams/:examId/students/:studentId/result', auth, (req, res) => {
+  const item = db.examAttempts.find((a) => a.examId === req.params.examId && a.userId === req.params.studentId && a.status === 'finished') || null;
   res.json({ item });
 });
 

@@ -38,6 +38,12 @@ export default function AttendancePage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!record.courseId && courses[0]) setRecord((p) => ({ ...p, courseId: courses[0].id }));
+    if (!leaveForm.courseId && courses[0]) setLeaveForm((p) => ({ ...p, courseId: courses[0].id }));
+    const student = users.find((u) => u.role === 'student');
+    if (!record.userId && student) setRecord((p) => ({ ...p, userId: student.id }));
+  }, [courses, users, record.courseId, record.userId, leaveForm.courseId]);
 
   useEffect(() => {
     const selectedCourseId = record.courseId;

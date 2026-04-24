@@ -1,127 +1,72 @@
-# LMS Assignment (Submission) Module
+# LMS (F.ITM301 Alignment)
 
-Production-style assignment submission module with React + Tailwind frontend and Node.js + Express backend.
-
-## Folder Structure
-
-```bash
-.
-├── backend/
-│   └── server.js
-├── src/
-│   ├── components/
-│   ├── context/
-│   ├── hooks/
-│   ├── pages/
-│   ├── services/
-│   └── utils/
-├── index.html
-├── package.json
-└── ...
-```
-
-## Frontend Features
-
-- React hooks only
-- React Router v6 pages
-- Tailwind-only UI
-- Role-based route protection (`student`, `teacher`, `admin`)
-- Assignment create/edit/view workflow
-- Teacher/Admin grading modal with lock after grading
-- Status badges (`pending`, `graded`, `late`)
-- Loading skeleton, empty state, error state
-- Search, status filter, pagination
-- Toast notifications
-
-## Backend Endpoints
-
-- `GET /api/submissions`
-- `GET /api/submissions/:id`
-- `POST /api/submissions`
-- `PUT /api/submissions/:id`
-- `POST /api/submissions/:id/grade`
-
-Submission shape:
-
-```json
-{
-  "id": "sub-1",
-  "lesson_id": "lesson-1",
-  "user_id": "user-student-1",
-  "content": "...",
-  "file_url": "https://...",
-  "video_url": "https://...",
-  "grade_point": null,
-  "feedback": "",
-  "status": "pending",
-  "created_at": "2026-04-24T00:00:00.000Z"
-}
-```
-
-## Run Locally
+## Install & run
 
 ```bash
 npm install
-npm run server   # starts Express on :4000
-npm run dev      # starts Vite on :5173 (with /api proxy)
+npm run server
+npm run dev
 ```
 
-## Route Map
+Frontend runs at `http://localhost:5173` and backend API at `http://localhost:4000`.
 
-- `/courses/:course_id/submissions`
-- `/courses/:course_id/lessons/:lesson_id/submissions`
-- `/courses/:course_id/lessons/:lesson_id/submissions/create`
-- `/courses/:course_id/lessons/:lesson_id/submissions/:id`
-- `/courses/:course_id/lessons/:lesson_id/submissions/:id/edit`
-
-## Example Requests
-
-```bash
-curl -X GET 'http://localhost:4000/api/submissions?course_id=course-1&lesson_id=lesson-1&page=1&pageSize=5'
-```
-
-```bash
-curl -X POST 'http://localhost:4000/api/submissions' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "course_id": "course-1",
-    "lesson_id": "lesson-1",
-    "user_id": "user-student-1",
-    "content": "My final answer",
-    "file_url": "https://example.com/answer.pdf",
-    "video_url": "https://youtu.be/demo"
-  }'
-```
-
-```bash
-curl -X POST 'http://localhost:4000/api/submissions/sub-1/grade' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "grade_point": 92,
-    "feedback": "Great work. Improve conclusion.",
-    "grader_id": "user-teacher-1"
-  }'
-```
-
-
-## Production API Integration
-
-This project now uses a centralized API client with Bearer authentication for the real LMS API.
-
-### Environment variables
+## API base URL setup
 
 Create `.env` from `.env.example` and set:
 
-- `VITE_API_BASE_URL=https://todu.mn/bs/lms/v1`
-- `VITE_SUBMISSIONS_ENDPOINT=/submissions`
-- `VITE_AUTH_TOKEN_KEY=lms_access_token`
-- `VITE_AUTH_USER_KEY=lms_auth_user`
+```bash
+VITE_API_BASE_URL=/api
+```
 
-### What is implemented
+You can also point to an external API URL (for example `https://your-host/api`).
 
-- Centralized API client: `src/services/apiClient.js`
-- Bearer token from localStorage automatically attached in every request
-- Unauthorized (`401`) auto-clears token and redirects to `/login`
-- Login function in API client (`POST /auth/login`)
-- Submission service layer in `src/services/submissionService.js` (GET/POST/PUT)
-- Example React usage in `src/components/SubmissionsExample.jsx`
+## Test accounts
+
+- `admin@must.edu.mn / 123`
+- `schooladmin@must.edu.mn / 123`
+- `schoolteacher@must.edu.mn / 123`
+- `schoolstudent@must.edu.mn / 123`
+
+Passwords are hashed with bcrypt in backend storage.
+
+## Known routes (assignment-critical)
+
+- Auth: `/login`, `/register`, `/forgot-password`, `/reset-password`
+- Profile: `/profile`, `/profile/change-password`
+- School and role modules: `/schools/current`, `/roles`
+- Course users/questions/grade modules:
+  - `/courses/:course_id/users`
+  - `/courses/:course_id/users/edit`
+  - `/courses/:course_id/groups/:group_id/users`
+  - `/question-types`
+  - `/question-levels`
+  - `/courses/:course_id/questions`
+  - `/courses/:course_id/question-points`
+  - `/courses/:course_id/questions/create`
+  - `/courses/:course_id/questions/:question_id`
+  - `/courses/:course_id/questions/:question_id/edit`
+  - `/courses/:course_id/questions/report`
+  - `/courses/:course_id/grade`
+  - `/grade`
+- Attendance modules:
+  - `/course/:course_id/attendances`
+  - `/course/:course_id/attendances/:lesson_id`
+  - `/course/:course_id/attendances/:lesson_id/requests`
+  - `/course/:course_id/attendances/requests`
+- Exam report/check/result:
+  - `/exams/:exam_id/report`
+  - `/exams/:exam_id/students/:student_id/check`
+  - `/exams/:exam_id/students/:student_id/result`
+
+## Role access summary
+
+- **Admin**: user/role/school/course management.
+- **School admin**: school-level and user management.
+- **Teacher**: course/lesson/submission grading/attendance/exam management.
+- **Student**: lesson/exam/submission/grade viewing and participation.
+
+## Notes
+
+- Public registration creates **student** accounts only.
+- Teacher/admin/school-admin accounts must be created by admin/school-admin endpoints.
+- Several module pages include API-backed rendering with sample fallback when API is unavailable.
