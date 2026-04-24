@@ -40,11 +40,17 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    clearToken();
-    localStorage.removeItem(USER_KEY);
-    setTokenState(null);
-    setUser(null);
+  const logout = async () => {
+    try {
+      if (token) await api.post('/auth/logout', {}, true);
+    } catch {
+      // ignore logout API failures for stateless JWT sessions
+    } finally {
+      clearToken();
+      localStorage.removeItem(USER_KEY);
+      setTokenState(null);
+      setUser(null);
+    }
   };
 
   const value = useMemo(() => ({ token, user, role: user?.role, loading, login, register, logout, isAuthenticated: !!token }), [token, user, loading]);
