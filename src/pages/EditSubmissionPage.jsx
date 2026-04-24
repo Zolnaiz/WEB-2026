@@ -22,7 +22,7 @@ export default function EditSubmissionPage() {
       try {
         const data = await getSubmissionById(id);
         if (!canEditSubmission(user, data.item)) {
-          pushToast('Submission cannot be edited (locked or no access)', 'error');
+          pushToast('Submission cannot be edited (already graded or no access)', 'error');
           navigate(`/courses/${course_id}/lessons/${lesson_id}/submissions/${id}`);
           return;
         }
@@ -39,6 +39,8 @@ export default function EditSubmissionPage() {
   const handleSubmit = async (values) => {
     setIsSubmitting(true);
     try {
+      const confirmed = window.confirm('Save changes to this submission?');
+      if (!confirmed) return;
       await updateSubmission(id, values);
       pushToast('Submission updated successfully', 'success');
       navigate(`/courses/${course_id}/lessons/${lesson_id}/submissions/${id}`);
@@ -52,10 +54,16 @@ export default function EditSubmissionPage() {
   if (loading) return <p className="text-sm text-slate-500">Loading submission...</p>;
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6">
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold">Edit Submission</h2>
+      <p className="mt-1 text-sm text-slate-500">Editing is only available while status is pending.</p>
       <div className="mt-4">
-        <SubmissionForm initialValues={submission} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        <SubmissionForm
+          initialValues={submission}
+          onSubmit={handleSubmit}
+          isSubmitting={isSubmitting}
+          submitLabel="Save Changes"
+        />
       </div>
     </section>
   );

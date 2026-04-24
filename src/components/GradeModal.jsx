@@ -1,9 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { validateGradeForm } from '../utils/validation';
 
 export default function GradeModal({ open, submission, onClose, onSubmit, isSubmitting }) {
-  const [values, setValues] = useState({ grade_point: submission?.grade_point ?? '', feedback: submission?.feedback ?? '' });
+  const [values, setValues] = useState({
+    grade_point: submission?.grade_point ?? '',
+    feedback: submission?.feedback ?? '',
+    status: submission?.status === 'needs_revision' ? 'needs_revision' : 'graded',
+  });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (!submission) return;
+    setValues({
+      grade_point: submission.grade_point ?? '',
+      feedback: submission.feedback ?? '',
+      status: submission.status === 'needs_revision' ? 'needs_revision' : 'graded',
+    });
+    setErrors({});
+  }, [submission, open]);
 
   if (!open || !submission) return null;
 
@@ -14,6 +28,7 @@ export default function GradeModal({ open, submission, onClose, onSubmit, isSubm
       setErrors(nextErrors);
       return;
     }
+
     onSubmit({ ...values, grade_point: Number(values.grade_point) });
   };
 
@@ -39,6 +54,18 @@ export default function GradeModal({ open, submission, onClose, onSubmit, isSubm
           </div>
 
           <div>
+            <label className="mb-1 block text-sm font-medium">Outcome</label>
+            <select
+              value={values.status}
+              onChange={(event) => setValues((prev) => ({ ...prev, status: event.target.value }))}
+              className="w-full rounded-md border border-slate-300 p-2.5 text-sm"
+            >
+              <option value="graded">Graded</option>
+              <option value="needs_revision">Needs revision</option>
+            </select>
+          </div>
+
+          <div>
             <label className="mb-1 block text-sm font-medium">Feedback</label>
             <textarea
               value={values.feedback}
@@ -51,11 +78,7 @@ export default function GradeModal({ open, submission, onClose, onSubmit, isSubm
             <button type="button" className="rounded-md border border-slate-300 px-3 py-2 text-sm" onClick={onClose}>
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
-            >
+            <button type="submit" disabled={isSubmitting} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
               {isSubmitting ? 'Saving...' : 'Save Grade'}
             </button>
           </div>

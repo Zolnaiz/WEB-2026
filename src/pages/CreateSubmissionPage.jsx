@@ -32,11 +32,11 @@ export default function CreateSubmissionPage() {
   };
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6">
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-lg font-semibold">Create Submission</h2>
-      <p className="mt-1 text-sm text-slate-500">Add assignment answer with files or video links.</p>
+      <p className="mt-1 text-sm text-slate-500">Submit text, image URL, file URL, and YouTube embed in one form.</p>
       <div className="mt-4">
-        <SubmissionForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        <SubmissionForm onSubmit={handleSubmit} isSubmitting={isSubmitting} submitLabel="Submit Assignment" />
       </div>
     </section>
   );

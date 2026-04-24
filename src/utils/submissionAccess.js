@@ -16,6 +16,13 @@ export const canViewSubmission = (user, submission) => {
 
 export const getStatusBadgeClass = (status) => {
   if (status === 'graded') return 'bg-emerald-100 text-emerald-700';
-  if (status === 'late') return 'bg-red-100 text-red-700';
+  if (status === 'needs_revision') return 'bg-red-100 text-red-700';
   return 'bg-amber-100 text-amber-700';
+};
+
+export const getSubmissionType = (submission) => {
+  if (submission.video_url) return 'video';
+  if (submission.image_url) return 'image';
+  if (submission.file_url) return 'file';
+  return 'text';
 };

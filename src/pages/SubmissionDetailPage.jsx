@@ -1,12 +1,25 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
 import GradeModal from '../components/GradeModal';
 import StatusBadge from '../components/StatusBadge';
+import SubmissionActions from '../components/SubmissionActions';
 import { useAuth } from '../hooks/useAuth';
 import { useSubmissions } from '../hooks/useSubmissions';
 import { useToast } from '../context/ToastContext';
-import { canEditSubmission, canGradeSubmission, canViewSubmission } from '../utils/submissionAccess';
+import { canViewSubmission } from '../utils/submissionAccess';
+
+function getYoutubeEmbedUrl(url) {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes('youtu.be')) return `https://www.youtube.com/embed/${parsed.pathname.slice(1)}`;
+    const videoId = parsed.searchParams.get('v');
+    return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
+  } catch {
+    return '';
+  }
+}
 
 export default function SubmissionDetailPage() {
   const { course_id, lesson_id, id } = useParams();
@@ -18,6 +31,8 @@ export default function SubmissionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [openGrade, setOpenGrade] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const embedVideoUrl = useMemo(() => getYoutubeEmbedUrl(submission?.video_url), [submission?.video_url]);
 
   useEffect(() => {
     const run = async () => {
@@ -58,37 +73,24 @@ export default function SubmissionDetailPage() {
 
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-6">
+      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-lg font-semibold">Submission #{submission.id}</h2>
           <StatusBadge status={submission.status} />
         </div>
         <p className="text-sm text-slate-600">Student: {submission.user_id}</p>
+        <p className="text-sm text-slate-600">Group: {submission.group_id || 'Individual'} | Members: {(submission.group_members || []).join(', ')}</p>
         <p className="mt-4 whitespace-pre-wrap text-sm text-slate-800">{submission.content}</p>
 
-        <div className="mt-4 grid gap-2 text-sm">
-          {submission.file_url && <a className="text-indigo-600" href={submission.file_url}>File URL</a>}
-          {submission.video_url && <a className="text-indigo-600" href={submission.video_url}>Video URL</a>}
+        <div className="mt-4 grid gap-4 text-sm md:grid-cols-2">
+          {submission.image_url && <img src={submission.image_url} alt="submission" className="h-48 w-full rounded-lg object-cover" />}
+          {embedVideoUrl && <iframe className="h-48 w-full rounded-lg" src={embedVideoUrl} title="Submitted video" allowFullScreen />}
+          {submission.file_url && <a className="font-medium text-indigo-600" href={submission.file_url}>Open file resource</a>}
           {submission.grade_point !== null && <p><span className="font-medium">Grade:</span> {submission.grade_point}</p>}
           {submission.feedback && <p><span className="font-medium">Feedback:</span> {submission.feedback}</p>}
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {canEditSubmission(user, submission) && (
-            <Link
-              className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
-              to={`/courses/${course_id}/lessons/${lesson_id}/submissions/${id}/edit`}
-            >
-              Edit Submission
-            </Link>
-          )}
-
-          {canGradeSubmission(user) && submission.status !== 'graded' && (
-            <button onClick={() => setOpenGrade(true)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white">
-              Grade Submission
-            </button>
-          )}
-        </div>
+        <SubmissionActions currentUser={user} submission={submission} onOpenGrade={() => setOpenGrade(true)} />
       </div>
 
       <GradeModal
