@@ -22,7 +22,11 @@ export default function LoginPage() {
       const user = await login(email, password);
       navigate(getRedirect(user?.role), { replace: true });
     } catch (err) {
-      setError(err.message);
+      if (err?.status === 500 && err?.endpoint === '/auth/login') {
+        setError('HTTP 500: Backend API ажиллахгүй байна. `npm run dev` эсвэл тусдаа `npm run server` ажиллуулна уу.');
+        return;
+      }
+      setError(err?.message || 'Login failed');
     }
   };
 
