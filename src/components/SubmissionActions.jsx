@@ -1,41 +1,33 @@
 import React from 'react';
-import {
-  applyGradeToSubmission,
-  canEditSubmission,
-  canGradeSubmission,
-  isSubmissionGraded,
-} from '../utils/submissionAccess';
+import { Link, useParams } from 'react-router-dom';
+import { canEditSubmission, canGradeSubmission, isSubmissionGraded } from '../utils/submissionAccess';
 import SubmissionLockIndicator from './SubmissionLockIndicator';
 
-export default function SubmissionActions({
-  currentUser,
-  submission,
-  onEdit,
-  onSaveGrade,
-}) {
+export default function SubmissionActions({ currentUser, submission, onOpenGrade }) {
+  const { course_id, lesson_id } = useParams();
   const editable = canEditSubmission(currentUser, submission);
   const gradeable = canGradeSubmission(currentUser);
   const locked = isSubmissionGraded(submission);
 
-  const handleSaveGrade = (grade) => {
-    if (!gradeable) return;
-    const updated = applyGradeToSubmission(submission, grade, currentUser.id);
-    onSaveGrade?.(updated);
-  };
-
   return (
-    <div>
-      <button type="button" disabled={!editable} onClick={onEdit}>
-        Edit submission
-      </button>
+    <div className="mt-4 flex flex-wrap items-center gap-2">
+      {editable && (
+        <Link
+          to={`/courses/${course_id}/lessons/${lesson_id}/submissions/${submission.id}/edit`}
+          className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+        >
+          Edit submission
+        </Link>
+      )}
 
       {gradeable && (
         <button
           type="button"
           disabled={locked}
-          onClick={() => handleSaveGrade('A')}
+          onClick={onOpenGrade}
+          className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
         >
-          Save grade
+          {locked ? 'Graded' : 'Grade submission'}
         </button>
       )}
 

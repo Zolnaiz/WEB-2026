@@ -1,57 +1,21 @@
-export function isSubmissionGraded(submission) {
-  return submission?.status === 'graded' || Boolean(submission?.graded_at);
-}
+export const isSubmissionGraded = (submission) => submission?.status === 'graded';
 
-export function canViewSubmission(currentUser, submission) {
-  if (!currentUser || !submission) return false;
+export const canEditSubmission = (user, submission) => {
+  if (!user || !submission) return false;
+  if (user.role === 'admin') return true;
+  return user.role === 'student' && user.id === submission.user_id && !isSubmissionGraded(submission);
+};
 
-  if (currentUser.role === 'teacher' || currentUser.role === 'admin') {
-    return true;
-  }
+export const canGradeSubmission = (user) => ['teacher', 'admin'].includes(user?.role);
 
-  if (currentUser.role === 'student') {
-    return submission.student_id === currentUser.id;
-  }
+export const canViewSubmission = (user, submission) => {
+  if (!user || !submission) return false;
+  if (['teacher', 'admin'].includes(user.role)) return true;
+  return user.role === 'student' && user.id === submission.user_id;
+};
 
-  return false;
-}
-
-export function canEditSubmission(currentUser, submission) {
-  if (!currentUser || !submission) return false;
-
-  if (currentUser.role !== 'student') {
-    return false;
-  }
-
-  const isOwner = submission.student_id === currentUser.id;
-  const locked = isSubmissionGraded(submission);
-
-  return isOwner && !locked;
-}
-
-export function canGradeSubmission(currentUser) {
-  if (!currentUser) return false;
-  return currentUser.role === 'teacher' || currentUser.role === 'admin';
-}
-
-export function applyGradeToSubmission(submission, grade, graderId) {
-  return {
-    ...submission,
-    grade,
-    grader_id: graderId,
-    status: 'graded',
-    graded_at: new Date().toISOString(),
-  };
-}
-
-export function getSubmissionLockReason(currentUser, submission) {
-  if (isSubmissionGraded(submission)) {
-    return 'Locked after grading';
-  }
-
-  if (currentUser?.role === 'student' && submission?.student_id !== currentUser?.id) {
-    return 'You can only edit your own submission';
-  }
-
-  return null;
-}
+export const getStatusBadgeClass = (status) => {
+  if (status === 'graded') return 'bg-emerald-100 text-emerald-700';
+  if (status === 'late') return 'bg-red-100 text-red-700';
+  return 'bg-amber-100 text-amber-700';
+};
