@@ -2,17 +2,37 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/
 const TOKEN_KEY = import.meta.env.VITE_AUTH_TOKEN_KEY || 'lms_access_token';
 const USER_KEY = import.meta.env.VITE_AUTH_USER_KEY || 'lms_auth_user';
 
+const PUBLIC_AUTH_ROUTES = new Set(['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password']);
+
 function emitAuthChange(eventType) {
-  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('auth:changed', { detail: { type: eventType } }));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:changed', { detail: { type: eventType } }));
+  }
+}
+
+export class ApiError extends Error {
+  constructor({ message, status, endpoint, method, data }) {
+    super(message || 'Request failed');
+    this.name = 'ApiError';
+    this.status = status;
+    this.endpoint = endpoint;
+    this.method = method;
+    this.data = data;
+  }
 }
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
-export const setToken = (t) => { localStorage.setItem(TOKEN_KEY, t); emitAuthChange('token:set'); };
+export const setToken = (token) => {
+  localStorage.setItem(TOKEN_KEY, token);
+  emitAuthChange('token:set');
+};
+
 export const clearSession = () => {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   emitAuthChange('session:cleared');
 };
+
 export const clearToken = () => clearSession();
 
 class ApiError extends Error {
@@ -27,6 +47,8 @@ class ApiError extends Error {
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const endpoint = `${API_BASE_URL}${path}`;
   const token = getToken();
+  const endpoint = `${API_BASE_URL}${path}`;
+
   const res = await fetch(endpoint, {
     method,
     headers: {
@@ -35,40 +57,45 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+
   const text = await res.text();
-  let data = null;
+  let payload = null;
   if (text) {
     try {
-      data = JSON.parse(text);
+      payload = JSON.parse(text);
     } catch {
-      data = { message: text };
+      payload = { message: text };
     }
   }
-  if (res.status === 501) {
-    console.error(`API 501 Not Implemented: ${method} ${endpoint}`);
-  }
-  if (res.status === 401) {
+
+  const data = payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'success')
+    ? payload.data
+    : payload;
+  const message = payload?.message || (res.ok ? 'OK' : `HTTP ${res.status}`);
+
+  if (res.status === 401 && !PUBLIC_AUTH_ROUTES.has(path)) {
     clearSession();
-    if (window.location.pathname !== '/login') window.location.href = '/login';
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+      window.location.href = '/login';
+    }
   }
-  if (res.status === 403 && window.location.pathname !== '/403') {
-    window.location.href = '/403';
+
+  if (res.status === 501 && import.meta.env.DEV) {
+    console.warn(`[API 501] ${method} ${path}`);
   }
-  if (!res.ok || (data && data.success === false)) {
-    const serverMessage = data?.message || `HTTP ${res.status}`;
-    throw new ApiError(`${serverMessage} (${res.status})`, res.status, endpoint);
+
+  if (!res.ok || payload?.success === false) {
+    throw new ApiError({ message, status: res.status, endpoint: path, method, data });
   }
-  if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'success')) {
-    return data.data ?? null;
-  }
-  return data;
+
+  return data ?? null;
 }
 
 export const api = {
-  get: (p) => request(p),
-  post: (p, b, auth = true) => request(p, { method: 'POST', body: b, auth }),
-  put: (p, b) => request(p, { method: 'PUT', body: b }),
-  del: (p) => request(p, { method: 'DELETE' }),
+  get: (path) => request(path),
+  post: (path, body, auth = true) => request(path, { method: 'POST', body, auth }),
+  put: (path, body) => request(path, { method: 'PUT', body }),
+  del: (path) => request(path, { method: 'DELETE' }),
 };
 
 export const getApiBaseUrl = () => API_BASE_URL;

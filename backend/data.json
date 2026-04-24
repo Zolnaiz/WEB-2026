@@ -2,31 +2,31 @@
   "users": [
     {
       "id": "u-admin",
-      "name": "Main Admin",
+      "name": "Admin User",
       "email": "admin@must.edu.mn",
       "role": "admin",
-      "passwordHash": "scrypt$13667ef1fc51329c3d293e6c18b39136$d5da428574524a14362c99d2887666662b111a1bd7a1165da8361fbcf34a7423f05188177b0de5a2aef9b7576b8309c656d7959884f162241d8ce0cd4212696f"
+      "passwordHash": "scrypt$c61c400270eadcd5d3a0010e308bb1a7$0e622449b3d16f0bd5b801e91ddb5c924b499dc2b1b3603542b9dd4bd080de3d66ae5634f1f4361906c73357cac9614dfa365f5f119cce6f9c63b604d8c7d717"
     },
     {
       "id": "u-schooladmin",
       "name": "School Admin",
       "email": "schooladmin@must.edu.mn",
       "role": "schooladmin",
-      "passwordHash": "scrypt$964d1bfe8d82837a7e2298cb3b1a446b$b43f9808fcf65d63ffab24904ba774addc63f435a103d7e595ef63c4417f045bc7b64211eea49df6e0e5d783020417b71833af3f4f60e274f9ccf5d8a26ebc3a"
+      "passwordHash": "scrypt$a3948314e92ae9d4fac7803c9fc2ae06$e65f4adbe291010f2f7f58d7dd9680fb7f5b0a0555056304f716f3dc8e26415fbfaed43cd11f8a632258df385f11450794a94917e26dcede69611da727bef15d"
     },
     {
-      "id": "u-schoolteacher",
+      "id": "u-teacher",
       "name": "School Teacher",
       "email": "schoolteacher@must.edu.mn",
       "role": "teacher",
-      "passwordHash": "scrypt$eeabecf7b09ffe0a4fecb6df6aa954ce$778379f80d9a91039ed685e0562b41d577415844461e6a6695d62dbcf4c12b56102cdf414fd63da2e86725a021f8bab94c0a0b952a65aab7b945ecefcd18deec"
+      "passwordHash": "scrypt$37211d7c0e217a167ef66dc83a755b70$a59ba32a75a870a455f333edc058d20dd330830f53fdbb06789d6c7a6687e76ed98ef8c0f17d0bc1acb17d01ad1f2f0d0642dd4aa8f1515f63b15ece2017f153"
     },
     {
-      "id": "u-schoolstudent",
+      "id": "u-student",
       "name": "School Student",
       "email": "schoolstudent@must.edu.mn",
       "role": "student",
-      "passwordHash": "scrypt$9069cf0481b03feaa46c2c6aaad14570$df2d69fe95394e73cf3cea426b20effa752daacda003e8d2cf0ea7a067caf2ddd6ee0838d66f54dd3daaf3fbb55ac00cbbdf11f11490dd95affef305f0b87ed0"
+      "passwordHash": "scrypt$8935859ab3cc15253eea30a2e9397956$6441cbca49a7c8e991d196bad7720c9438c7189f7e5c1d4f6d5e85d7509c344bd59c32359c111c6d8b21a5f944c971b649085705530cf0a39d338b754697595c"
     }
   ],
   "courses": [
@@ -61,12 +61,33 @@
       ]
     }
   ],
-  "submissions": [],
+  "submissions": [
+    {
+      "id": "sb-4b9a19c0",
+      "courseId": "c-1",
+      "lessonId": "l-1",
+      "userId": "u-student",
+      "content": "",
+      "fileUrl": "https://example.com/a.pdf",
+      "status": "graded",
+      "grade": 95,
+      "feedback": "ok",
+      "createdAt": "2026-04-24T05:07:14.987Z",
+      "gradedBy": "u-teacher",
+      "gradedAt": "2026-04-24T06:17:50.999Z"
+    }
+  ],
   "exams": [
     {
       "id": "e-1",
       "courseId": "c-1",
       "title": "Midterm",
+      "durationMinutes": 30
+    },
+    {
+      "id": "ex-84b3c93e",
+      "courseId": "c-1",
+      "title": "Quiz",
       "durationMinutes": 30
     }
   ],
@@ -75,6 +96,11 @@
       "id": "v-1",
       "examId": "e-1",
       "title": "Variant A"
+    },
+    {
+      "id": "va-6a6d0f20",
+      "examId": "ex-84b3c93e",
+      "title": "V2"
     }
   ],
   "examQuestions": [
@@ -88,9 +114,33 @@
         "5"
       ],
       "correctAnswer": "4"
+    },
+    {
+      "id": "qu-33049334",
+      "variantId": "va-6a6d0f20",
+      "text": "1+1?",
+      "options": [
+        "1",
+        "2"
+      ],
+      "correctAnswer": "2"
     }
   ],
-  "examAttempts": [],
+  "examAttempts": [
+    {
+      "id": "atp-4a942976",
+      "examId": "e-1",
+      "userId": "u-student",
+      "variantId": "v-1",
+      "answers": {
+        "q-1": "4"
+      },
+      "status": "finished",
+      "score": 100,
+      "startedAt": "2026-04-24T06:17:51.012Z",
+      "finishedAt": "2026-04-24T06:17:51.019Z"
+    }
+  ],
   "attendanceTypes": [
     {
       "id": "at-1",

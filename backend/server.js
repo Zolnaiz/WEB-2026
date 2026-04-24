@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 const DATA_FILE = path.join(__dirname, 'data.json');
 const PORT = process.env.PORT || 4000;
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key';
+const DEFAULT_PASSWORD = '123';
 
 const app = express();
 app.use(cors());
@@ -116,6 +117,86 @@ function persist() {
 }
 const genId = (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const digest = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `scrypt$${salt}$${digest}`;
+}
+
+function verifyPassword(password, passwordHash) {
+  if (!passwordHash) return false;
+  if (!passwordHash.startsWith('scrypt$')) return password === passwordHash;
+  const [, salt, hash] = passwordHash.split('$');
+  const digest = crypto.scryptSync(password, salt, 64).toString('hex');
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(digest, 'hex'));
+}
+
+function ensureDefaultUsers() {
+  const defaults = [
+    { id: 'u-admin', name: 'Admin User', email: 'admin@must.edu.mn', role: 'admin' },
+    { id: 'u-schooladmin', name: 'School Admin', email: 'schooladmin@must.edu.mn', role: 'schooladmin' },
+    { id: 'u-teacher', name: 'School Teacher', email: 'schoolteacher@must.edu.mn', role: 'teacher' },
+    { id: 'u-student', name: 'School Student', email: 'schoolstudent@must.edu.mn', role: 'student' },
+  ];
+
+  let changed = false;
+  for (const base of defaults) {
+    const existing = db.users.find((u) => u.email === base.email || u.id === base.id);
+    const passwordHash = hashPassword(DEFAULT_PASSWORD);
+    if (!existing) {
+      db.users.push({ ...base, passwordHash });
+      changed = true;
+      continue;
+    }
+    existing.id = base.id;
+    existing.name = base.name;
+    existing.email = base.email;
+    existing.role = base.role;
+    if (!verifyPassword(DEFAULT_PASSWORD, existing.passwordHash || existing.password)) {
+      existing.passwordHash = passwordHash;
+    } else if (!existing.passwordHash) {
+      existing.passwordHash = hashPassword(DEFAULT_PASSWORD);
+    }
+    delete existing.password;
+    changed = true;
+  }
+
+  db.users = db.users.filter((user) => defaults.some((d) => d.id === user.id) || user.id.startsWith('u-'));
+
+  if (!db.courses.some((course) => course.id === 'c-1')) {
+    db.courses.push({ id: 'c-1', title: 'Web Engineering', description: 'Core LMS demo course', teacherId: 'u-teacher', groupIds: ['g-1'], createdAt: new Date().toISOString() });
+    changed = true;
+  }
+  if (!db.groups.some((group) => group.id === 'g-1')) {
+    db.groups.push({ id: 'g-1', courseId: 'c-1', name: 'Group A', userIds: ['u-student'] });
+    changed = true;
+  } else {
+    const group = db.groups.find((g) => g.id === 'g-1');
+    if (!group.userIds.includes('u-student')) {
+      group.userIds.push('u-student');
+      changed = true;
+    }
+  }
+  if (!db.lessons.some((lesson) => lesson.id === 'l-1')) {
+    db.lessons.push({ id: 'l-1', courseId: 'c-1', title: 'Lesson 1', type: 'assignment', parentId: null, content: 'Build LMS module' });
+    changed = true;
+  }
+  if (!db.exams.some((exam) => exam.id === 'e-1')) {
+    db.exams.push({ id: 'e-1', courseId: 'c-1', title: 'Midterm', durationMinutes: 30 });
+    changed = true;
+  }
+  if (!db.examVariants.some((variant) => variant.id === 'v-1')) {
+    db.examVariants.push({ id: 'v-1', examId: 'e-1', title: 'Variant A' });
+    changed = true;
+  }
+  if (!db.examQuestions.some((question) => question.id === 'q-1')) {
+    db.examQuestions.push({ id: 'q-1', variantId: 'v-1', text: '2+2=?', options: ['3', '4', '5'], correctAnswer: '4' });
+    changed = true;
+  }
+
+  if (changed) persist();
+}
+
 const requestLocks = new Set();
 function withRequestLock(key, onLocked, fn) {
   if (requestLocks.has(key)) return onLocked();
@@ -199,27 +280,39 @@ function findCourse(courseId) {
 function canAccessCourse(user, courseId) {
   const course = findCourse(courseId);
   if (!course) return false;
-  if (user.role === 'admin') return true;
+  if (user.role === 'admin' || user.role === 'schooladmin') return true;
   if (user.role === 'teacher') return course.teacherId === user.id;
   return inCourseGroup(user.id, courseId);
 }
 
 function ensureTeacherOwnsCourse(req, res, courseId) {
-  if (req.user.role === 'admin') return true;
+  if (req.user.role === 'admin' || req.user.role === 'schooladmin') return true;
   if (req.user.role === 'teacher' && canAccessCourse(req.user, courseId)) return true;
   res.status(403).json({ message: 'Forbidden' });
   return false;
 }
 
+ensureDefaultUsers();
+
 app.get('/api/health', (_req, res) => res.json({ message: 'ok' }));
+app.get('/api/roles', auth, allow('admin', 'schooladmin'), (_req, res) => res.json({ items: ROLES.map((id) => ({ id, name: id })) }));
+app.get('/api/school', auth, allow('admin', 'schooladmin'), (_req, res) => res.json({ item: { id: 'must', name: 'MUST', code: 'MUST' } }));
+app.get('/api/question-types', auth, (_req, res) => res.json({ items: [{ id: 'multiple-choice', name: 'Multiple Choice' }] }));
+app.get('/api/question-levels', auth, (_req, res) => res.json({ items: [{ id: 'easy', name: 'Easy' }, { id: 'medium', name: 'Medium' }, { id: 'hard', name: 'Hard' }] }));
+app.get('/api/grade', auth, (req, res) => {
+  let items = db.submissions;
+  if (req.user.role === 'student') items = items.filter((submission) => submission.userId === req.user.id);
+  if (req.user.role === 'teacher') items = items.filter((submission) => canAccessCourse(req.user, submission.courseId));
+  res.json({ items: items.map((submission) => ({ id: submission.id, courseId: submission.courseId, lessonId: submission.lessonId, grade: submission.grade, status: submission.status })) });
+});
 
 app.post('/api/auth/register', (req, res) => {
   const { name, email, password } = req.body;
-  const role = 'student';
   if (!name || !email || !password) return res.status(400).json({ message: 'name, email, password are required' });
+  if (String(password).length < 3) return res.status(400).json({ message: 'password length must be at least 3' });
   if (db.users.some((u) => u.email === email)) return res.status(400).json({ message: 'Email already exists' });
 
-  const user = { id: genId('u'), name, email, passwordHash: hashPassword(password), role };
+  const user = { id: genId('u'), name, email, passwordHash: hashPassword(password), role: 'student' };
   db.users.push(user);
   persist();
 
@@ -230,9 +323,13 @@ app.post('/api/auth/register', (req, res) => {
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ message: 'email and password are required' });
-  const user = db.users.find((u) => u.email === email);
+  const user = db.users.find((u) => u.email === email && verifyPassword(password, u.passwordHash || u.password));
   if (!user) return res.status(401).json({ message: 'Invalid credentials' });
-  if (!verifyPassword(password, user.passwordHash || user.password)) return res.status(401).json({ message: 'Invalid credentials' });
+  if (!user.passwordHash) {
+    user.passwordHash = hashPassword(password);
+    delete user.password;
+    persist();
+  }
   const token = signToken({ id: user.id, email: user.email, role: user.role, name: user.name });
   res.status(200).json({ token, user: sanitizeUser(user) });
 });
@@ -272,28 +369,48 @@ app.get('/api/auth/me', auth, (req, res) => {
   res.json({ user: sanitizeUser(user) });
 });
 
+app.post('/api/auth/forgot-password', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'email is required' });
+  const user = db.users.find((entry) => entry.email === email);
+  if (!user) return res.status(200).json({ message: 'If email exists, reset token sent' });
+  user.resetToken = crypto.randomBytes(12).toString('hex');
+  user.resetTokenExp = Date.now() + (1000 * 60 * 15);
+  persist();
+  res.json({ message: 'Reset token generated', resetToken: user.resetToken });
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const { token, password } = req.body;
+  if (!token || !password) return res.status(400).json({ message: 'token and password are required' });
+  if (String(password).length < 3) return res.status(400).json({ message: 'password length must be at least 3' });
+  const user = db.users.find((entry) => entry.resetToken === token && Number(entry.resetTokenExp) > Date.now());
+  if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+  user.passwordHash = hashPassword(password);
+  delete user.password;
+  delete user.resetToken;
+  delete user.resetTokenExp;
+  persist();
+  res.json({ message: 'Password reset successful' });
+});
+
 app.get('/api/profile', auth, (req, res) => {
-  const user = db.users.find((u) => u.id === req.user.id);
+  const user = db.users.find((entry) => entry.id === req.user.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
   res.json({ item: sanitizeUser(user) });
 });
 
 app.put('/api/profile/change-password', auth, (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword) return res.status(400).json({ message: 'currentPassword and newPassword are required' });
-  const user = db.users.find((u) => u.id === req.user.id);
+  const { oldPassword, newPassword } = req.body;
+  if (!oldPassword || !newPassword) return res.status(400).json({ message: 'oldPassword and newPassword are required' });
+  if (String(newPassword).length < 3) return res.status(400).json({ message: 'new password must be at least 3 characters' });
+  const user = db.users.find((entry) => entry.id === req.user.id);
   if (!user) return res.status(404).json({ message: 'User not found' });
-  if (!verifyPassword(currentPassword, user.passwordHash || user.password)) return res.status(400).json({ message: 'Current password is incorrect' });
+  if (!verifyPassword(oldPassword, user.passwordHash || user.password)) return res.status(400).json({ message: 'Old password is incorrect' });
   user.passwordHash = hashPassword(newPassword);
   delete user.password;
   persist();
-  res.json({ message: 'Password changed successfully' });
-});
-
-app.get('/api/roles', auth, allow('admin', 'schooladmin'), (_req, res) => res.json({ items: db.roles }));
-app.get('/api/schools/current', auth, (req, res) => {
-  const school = db.schools.find((entry) => entry.adminUserId === req.user.id) || db.schools[0] || null;
-  res.json({ item: school });
+  res.json({ message: 'Password updated successfully' });
 });
 
 app.get('/api/users', auth, allow('admin', 'schooladmin'), (_req, res) => res.json({ items: db.users.map(sanitizeUser) }));
@@ -344,7 +461,17 @@ app.get('/api/courses/:id', auth, (req, res) => {
   res.json({ item });
 });
 
-app.post('/api/courses', auth, allow('admin', 'teacher'), (req, res) => {
+app.get('/api/courses/:id/users', auth, (req, res) => {
+  const course = findCourse(req.params.id);
+  if (!course) return res.status(404).json({ message: 'Course not found' });
+  if (!canAccessCourse(req.user, course.id)) return res.status(403).json({ message: 'Forbidden' });
+  const groupUserIds = db.groups.filter((group) => group.courseId === course.id).flatMap((group) => group.userIds);
+  const allowedIds = new Set([course.teacherId, ...groupUserIds]);
+  const items = db.users.filter((user) => allowedIds.has(user.id)).map(sanitizeUser);
+  res.json({ items });
+});
+
+app.post('/api/courses', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { title, description = '', teacherId } = req.body;
   if (!title) return res.status(400).json({ message: 'title is required' });
   const ownerId = req.user.role === 'teacher' ? req.user.id : teacherId;
@@ -357,7 +484,7 @@ app.post('/api/courses', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(201).json({ item });
 });
 
-app.put('/api/courses/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.put('/api/courses/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.courses.findIndex((course) => course.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.courses[idx].id)) return;
@@ -369,7 +496,7 @@ app.put('/api/courses/:id', auth, allow('admin', 'teacher'), (req, res) => {
   res.json({ item: db.courses[idx] });
 });
 
-app.delete('/api/courses/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.delete('/api/courses/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.courses.findIndex((course) => course.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.courses[idx].id)) return;
@@ -386,7 +513,7 @@ app.get('/api/lessons', auth, (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/lessons', auth, allow('admin', 'teacher'), (req, res) => {
+app.post('/api/lessons', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { courseId, title, type = 'assignment', parentId = null, content = '' } = req.body;
   if (!courseId || !title) return res.status(400).json({ message: 'courseId and title are required' });
   if (!findCourse(courseId)) return res.status(400).json({ message: 'Invalid courseId' });
@@ -400,7 +527,7 @@ app.post('/api/lessons', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(201).json({ item });
 });
 
-app.put('/api/lessons/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.put('/api/lessons/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.lessons.findIndex((lesson) => lesson.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.lessons[idx].courseId)) return;
@@ -409,7 +536,7 @@ app.put('/api/lessons/:id', auth, allow('admin', 'teacher'), (req, res) => {
   res.json({ item: db.lessons[idx] });
 });
 
-app.delete('/api/lessons/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.delete('/api/lessons/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.lessons.findIndex((lesson) => lesson.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.lessons[idx].courseId)) return;
@@ -428,7 +555,7 @@ app.get('/api/groups', auth, (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/groups', auth, allow('admin', 'teacher'), (req, res) => {
+app.post('/api/groups', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { courseId, name, userIds = [] } = req.body;
   if (!courseId || !name) return res.status(400).json({ message: 'courseId and name are required' });
   if (!ensureTeacherOwnsCourse(req, res, courseId)) return;
@@ -438,7 +565,7 @@ app.post('/api/groups', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(201).json({ item });
 });
 
-app.put('/api/groups/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.put('/api/groups/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.groups.findIndex((group) => group.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.groups[idx].courseId)) return;
@@ -447,7 +574,7 @@ app.put('/api/groups/:id', auth, allow('admin', 'teacher'), (req, res) => {
   res.json({ item: db.groups[idx] });
 });
 
-app.delete('/api/groups/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.delete('/api/groups/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.groups.findIndex((group) => group.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.groups[idx].courseId)) return;
@@ -456,7 +583,7 @@ app.delete('/api/groups/:id', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(200).json({ message: 'Group deleted' });
 });
 
-app.get('/api/courses/:id/report', auth, allow('admin', 'teacher'), (req, res) => {
+app.get('/api/courses/:id/report', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const courseId = req.params.id;
   if (!findCourse(courseId)) return res.status(404).json({ message: 'Course not found' });
   if (!ensureTeacherOwnsCourse(req, res, courseId)) return;
@@ -470,7 +597,37 @@ app.get('/api/courses/:id/report', auth, allow('admin', 'teacher'), (req, res) =
   res.json({ item: report });
 });
 
-app.post('/api/groups/:id/users/:userId', auth, allow('admin', 'teacher'), (req, res) => {
+app.get('/api/courses/:courseId/questions/report', auth, (req, res) => {
+  if (!canAccessCourse(req.user, req.params.courseId)) return res.status(403).json({ message: 'Forbidden' });
+  const examIds = db.exams.filter((exam) => exam.courseId === req.params.courseId).map((exam) => exam.id);
+  const variantIds = db.examVariants.filter((variant) => examIds.includes(variant.examId)).map((variant) => variant.id);
+  const items = db.examQuestions.filter((question) => variantIds.includes(question.variantId));
+  res.json({ items, summary: { total: items.length } });
+});
+
+app.post('/api/courses/:courseId/questions/create', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
+  const { variantId, text, options, correctAnswer } = req.body;
+  if (!variantId || !text || !Array.isArray(options) || options.length < 2 || !correctAnswer) {
+    return res.status(400).json({ message: 'variantId, text, options, correctAnswer are required' });
+  }
+  const variant = db.examVariants.find((entry) => entry.id === variantId);
+  const exam = variant ? db.exams.find((entry) => entry.id === variant.examId) : null;
+  if (!exam || exam.courseId !== req.params.courseId) return res.status(400).json({ message: 'Variant does not belong to this course' });
+  if (!ensureTeacherOwnsCourse(req, res, req.params.courseId)) return;
+  const item = { id: genId('qu'), variantId, text, options, correctAnswer };
+  db.examQuestions.push(item);
+  persist();
+  res.status(201).json({ item });
+});
+
+app.get('/api/courses/:courseId/questions/:questionId', auth, (req, res) => {
+  if (!canAccessCourse(req.user, req.params.courseId)) return res.status(403).json({ message: 'Forbidden' });
+  const item = db.examQuestions.find((question) => question.id === req.params.questionId);
+  if (!item) return res.status(404).json({ message: 'Question not found' });
+  res.json({ item });
+});
+
+app.post('/api/groups/:id/users/:userId', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const group = db.groups.find((g) => g.id === req.params.id);
   if (!group) return res.status(404).json({ message: 'Group not found' });
   if (!ensureTeacherOwnsCourse(req, res, group.courseId)) return;
@@ -479,7 +636,7 @@ app.post('/api/groups/:id/users/:userId', auth, allow('admin', 'teacher'), (req,
   res.json({ item: group });
 });
 
-app.delete('/api/groups/:id/users/:userId', auth, allow('admin', 'teacher'), (req, res) => {
+app.delete('/api/groups/:id/users/:userId', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const group = db.groups.find((g) => g.id === req.params.id);
   if (!group) return res.status(404).json({ message: 'Group not found' });
   if (!ensureTeacherOwnsCourse(req, res, group.courseId)) return;
@@ -511,7 +668,7 @@ app.get('/api/submissions/:id', auth, (req, res) => {
   res.json({ item });
 });
 
-app.post('/api/submissions', auth, allow('student', 'admin'), (req, res) => {
+app.post('/api/submissions', auth, allow('student', 'admin', 'schooladmin'), (req, res) => {
   const courseId = req.body.courseId ?? req.body.course_id;
   const lessonId = req.body.lessonId ?? req.body.lesson_id;
   const { content: safeContent, fileUrl: safeFileUrl } = normalizeSubmissionPayload(req.body);
@@ -550,7 +707,7 @@ app.post('/api/submissions', auth, allow('student', 'admin'), (req, res) => {
   );
 });
 
-app.put('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) => {
+app.put('/api/submissions/:id', auth, allow('student', 'admin', 'schooladmin'), (req, res) => {
   const item = db.submissions.find((submission) => submission.id === req.params.id);
   if (!item) return res.status(404).json({ message: 'Not found' });
   if (item.status === 'graded') return res.status(400).json({ message: 'Cannot edit graded submission' });
@@ -567,7 +724,7 @@ app.put('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) => {
   res.json({ item });
 });
 
-app.delete('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) => {
+app.delete('/api/submissions/:id', auth, allow('student', 'admin', 'schooladmin'), (req, res) => {
   const idx = db.submissions.findIndex((submission) => submission.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   const item = db.submissions[idx];
@@ -579,7 +736,7 @@ app.delete('/api/submissions/:id', auth, allow('student', 'admin'), (req, res) =
   res.status(200).json({ message: 'Submission deleted' });
 });
 
-app.post('/api/submissions/:id/grade', auth, allow('teacher', 'admin'), (req, res) => {
+app.post('/api/submissions/:id/grade', auth, allow('teacher', 'admin', 'schooladmin'), (req, res) => {
   const item = db.submissions.find((submission) => submission.id === req.params.id);
   if (!item) return res.status(404).json({ message: 'Not found' });
   if (!canAccessCourse(req.user, item.courseId)) return res.status(403).json({ message: 'Forbidden' });
@@ -602,11 +759,11 @@ app.post('/api/submissions/:id/grade', auth, allow('teacher', 'admin'), (req, re
 
 app.get('/api/exams', auth, (req, res) => {
   let items = db.exams;
-  if (req.user.role !== 'admin') items = items.filter((exam) => canAccessCourse(req.user, exam.courseId));
+  if (!['admin', 'schooladmin'].includes(req.user.role)) items = items.filter((exam) => canAccessCourse(req.user, exam.courseId));
   res.json({ items });
 });
 
-app.post('/api/exams', auth, allow('admin', 'teacher'), (req, res) => {
+app.post('/api/exams', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { courseId, title, durationMinutes = 30 } = req.body;
   if (!courseId || !title) return res.status(400).json({ message: 'courseId and title are required' });
   if (!ensureTeacherOwnsCourse(req, res, courseId)) return;
@@ -616,7 +773,7 @@ app.post('/api/exams', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(201).json({ item });
 });
 
-app.put('/api/exams/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.put('/api/exams/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.exams.findIndex((exam) => exam.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.exams[idx].courseId)) return;
@@ -625,7 +782,7 @@ app.put('/api/exams/:id', auth, allow('admin', 'teacher'), (req, res) => {
   res.json({ item: db.exams[idx] });
 });
 
-app.delete('/api/exams/:id', auth, allow('admin', 'teacher'), (req, res) => {
+app.delete('/api/exams/:id', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const idx = db.exams.findIndex((exam) => exam.id === req.params.id);
   if (idx < 0) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, db.exams[idx].courseId)) return;
@@ -644,7 +801,7 @@ app.get('/api/exam-variants', auth, (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/exam-variants', auth, allow('admin', 'teacher'), (req, res) => {
+app.post('/api/exam-variants', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { examId, title } = req.body;
   const exam = db.exams.find((entry) => entry.id === examId);
   if (!exam || !title) return res.status(400).json({ message: 'examId and title are required' });
@@ -655,7 +812,7 @@ app.post('/api/exam-variants', auth, allow('admin', 'teacher'), (req, res) => {
   res.status(201).json({ item });
 });
 
-app.post('/api/exam-questions', auth, allow('admin', 'teacher'), (req, res) => {
+app.post('/api/exam-questions', auth, allow('admin', 'schooladmin', 'teacher'), (req, res) => {
   const { variantId, text, options, correctAnswer } = req.body;
   const variant = db.examVariants.find((entry) => entry.id === variantId);
   if (!variant || !text || !Array.isArray(options) || options.length < 2 || !correctAnswer) {
@@ -802,7 +959,7 @@ app.get('/api/attendance-types', auth, (req, res) => {
   res.json({ items: db.attendanceTypes });
 });
 
-app.post('/api/attendance-types', auth, allow('admin'), (req, res) => {
+app.post('/api/attendance-types', auth, allow('admin', 'schooladmin'), (req, res) => {
   const { name } = req.body;
   if (!name) return res.status(400).json({ message: 'name is required' });
   const item = { id: genId('at'), name };
@@ -820,7 +977,7 @@ app.get('/api/attendance', auth, (req, res) => {
   res.json({ items });
 });
 
-app.post('/api/attendance', auth, allow('teacher', 'admin'), (req, res) => {
+app.post('/api/attendance', auth, allow('teacher', 'admin', 'schooladmin'), (req, res) => {
   const { userId, courseId, date, type } = req.body;
   if (!userId || !courseId || !date || !type) return res.status(400).json({ message: 'userId, courseId, date, type are required' });
   if (!ensureTeacherOwnsCourse(req, res, courseId)) return;
@@ -860,7 +1017,7 @@ app.post('/api/leave-requests', auth, allow('student'), (req, res) => {
   );
 });
 
-app.post('/api/leave-requests/:id/approve', auth, allow('teacher', 'admin'), (req, res) => {
+app.post('/api/leave-requests/:id/approve', auth, allow('teacher', 'admin', 'schooladmin'), (req, res) => {
   const item = db.leaveRequests.find((request) => request.id === req.params.id);
   if (!item) return res.status(404).json({ message: 'Not found' });
   if (!ensureTeacherOwnsCourse(req, res, item.courseId)) return;

@@ -35,11 +35,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem(USER_KEY, JSON.stringify(r.user));
       setTokenState(r.token);
       setUser(r.user);
-    } catch (error) {
-      if (error?.status === 501) {
-        console.error(`Login failed with 501 at endpoint: ${error.endpoint}`);
-      }
-      throw error;
+      return r.user;
     } finally {
       setLoading(false);
     }
@@ -53,6 +49,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem(USER_KEY, JSON.stringify(r.user));
       setTokenState(r.token);
       setUser(r.user);
+      return r.user;
     } finally {
       setLoading(false);
     }
@@ -67,6 +64,7 @@ export function AuthProvider({ children }) {
       clearSession();
       setTokenState(null);
       setUser(null);
+      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
   };
 
