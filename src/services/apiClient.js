@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || import.meta.env.REACT_APP_API_BASE;
 const TOKEN_KEY = import.meta.env.VITE_AUTH_TOKEN_KEY || 'lms_access_token';
 
 class ApiError extends Error {
@@ -45,7 +45,7 @@ export function clearStoredToken() {
 
 async function request(path, { method = 'GET', data, headers = {}, withAuth = true } = {}) {
   if (!API_BASE_URL) {
-    throw new ApiError('Missing VITE_API_BASE_URL environment variable.');
+    throw new ApiError('Missing API base URL environment variable (VITE_API_BASE_URL or REACT_APP_API_BASE).');
   }
 
   const token = withAuth ? getStoredToken() : null;
