@@ -1,0 +1,116 @@
+{
+  "users": [
+    {
+      "id": "u-admin",
+      "name": "Admin User",
+      "email": "admin@lms.com",
+      "password": "admin123",
+      "role": "admin"
+    },
+    {
+      "id": "u-teacher",
+      "name": "Teacher User",
+      "email": "teacher@lms.com",
+      "password": "teacher123",
+      "role": "teacher"
+    },
+    {
+      "id": "u-student",
+      "name": "Student User",
+      "email": "student@lms.com",
+      "password": "student123",
+      "role": "student"
+    }
+  ],
+  "courses": [
+    {
+      "id": "c-1",
+      "title": "Web Engineering",
+      "description": "Core LMS demo course",
+      "teacherId": "u-teacher",
+      "groupIds": [
+        "g-1"
+      ],
+      "createdAt": "2026-04-24T05:07:08.068Z"
+    }
+  ],
+  "lessons": [
+    {
+      "id": "l-1",
+      "courseId": "c-1",
+      "title": "Lesson 1",
+      "type": "assignment",
+      "parentId": null,
+      "content": "Build LMS module"
+    }
+  ],
+  "groups": [
+    {
+      "id": "g-1",
+      "courseId": "c-1",
+      "name": "Group A",
+      "userIds": [
+        "u-student"
+      ]
+    }
+  ],
+  "submissions": [
+    {
+      "id": "sb-4b9a19c0",
+      "courseId": "c-1",
+      "lessonId": "l-1",
+      "userId": "u-student",
+      "content": "",
+      "fileUrl": "https://example.com/a.pdf",
+      "status": "submitted",
+      "grade": null,
+      "feedback": "",
+      "createdAt": "2026-04-24T05:07:14.987Z"
+    }
+  ],
+  "exams": [
+    {
+      "id": "e-1",
+      "courseId": "c-1",
+      "title": "Midterm",
+      "durationMinutes": 30
+    }
+  ],
+  "examVariants": [
+    {
+      "id": "v-1",
+      "examId": "e-1",
+      "title": "Variant A"
+    }
+  ],
+  "examQuestions": [
+    {
+      "id": "q-1",
+      "variantId": "v-1",
+      "text": "2+2=?",
+      "options": [
+        "3",
+        "4",
+        "5"
+      ],
+      "correctAnswer": "4"
+    }
+  ],
+  "examAttempts": [],
+  "attendanceTypes": [
+    {
+      "id": "at-1",
+      "name": "present"
+    },
+    {
+      "id": "at-2",
+      "name": "absent"
+    },
+    {
+      "id": "at-3",
+      "name": "leave"
+    }
+  ],
+  "attendanceRecords": [],
+  "leaveRequests": []
+}
