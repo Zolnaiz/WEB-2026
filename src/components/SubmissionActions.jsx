@@ -1,19 +1,20 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { canEditSubmission, canGradeSubmission, isSubmissionGraded } from '../utils/submissionAccess';
+import { canEditSubmission, canGradeSubmission } from '../utils/submissionAccess';
 import SubmissionLockIndicator from './SubmissionLockIndicator';
 
 export default function SubmissionActions({ currentUser, submission, onOpenGrade }) {
   const { course_id, lesson_id } = useParams();
+  const resolvedLessonId = lesson_id || submission.lesson_id;
   const editable = canEditSubmission(currentUser, submission);
   const gradeable = canGradeSubmission(currentUser);
-  const locked = isSubmissionGraded(submission);
+  const locked = submission?.status === 'graded';
 
   return (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       {editable && (
         <Link
-          to={`/courses/${course_id}/lessons/${lesson_id}/submissions/${submission.id}/edit`}
+          to={`/courses/${course_id}/lessons/${resolvedLessonId}/submissions/${submission.id}/edit`}
           className="rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white"
         >
           Edit submission

@@ -3,18 +3,25 @@ const BASE_URL = '/api/submissions';
 async function handleResponse(response) {
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.message || 'Request failed');
+    const message = payload.message || 'Request failed';
+    const error = new Error(message);
+    error.details = payload.errors || {};
+    throw error;
   }
   return response.json();
 }
 
-export async function getSubmissions(params = {}) {
-  const query = new URLSearchParams(params).toString();
+export async function getSubmissions(course_id, options = {}) {
+  const query = new URLSearchParams({ course_id, ...options }).toString();
   const response = await fetch(query ? `${BASE_URL}?${query}` : BASE_URL);
   return handleResponse(response);
 }
 
-export async function getSubmissionById(id) {
+export async function getLessonSubmissions(course_id, lesson_id, options = {}) {
+  return getSubmissions(course_id, { lesson_id, ...options });
+}
+
+export async function getSubmission(id) {
   const response = await fetch(`${BASE_URL}/${id}`);
   return handleResponse(response);
 }

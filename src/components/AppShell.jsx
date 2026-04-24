@@ -7,9 +7,9 @@ export default function AppShell({ children }) {
   const location = useLocation();
 
   const navLinks = [
-    { to: '/courses/course-1/submissions', label: 'Teacher Dashboard' },
-    { to: '/courses/course-1/lessons/lesson-1/submissions', label: 'Lesson Submissions' },
-    { to: '/courses/course-1/lessons/lesson-1/submissions/create', label: 'Create Submission' },
+    { to: '/courses/course-1/submissions', label: 'Teacher Dashboard', roles: ['teacher', 'admin'] },
+    { to: '/courses/course-1/lessons/lesson-1/submissions', label: 'Lesson Submissions', roles: ['student', 'teacher', 'admin'] },
+    { to: '/courses/course-1/lessons/lesson-1/submissions/create', label: 'Create Submission', roles: ['student', 'admin'] },
   ];
 
   return (
@@ -33,19 +33,21 @@ export default function AppShell({ children }) {
           </div>
         </div>
         <nav className="mx-auto flex w-full max-w-7xl flex-wrap gap-2 px-4 pb-4">
-          {navLinks.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                location.pathname === item.to
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navLinks
+            .filter((item) => item.roles.includes(role))
+            .map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={`rounded-md px-3 py-2 text-sm font-medium ${
+                  location.pathname === item.to
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {item.label}
+              </Link>
+            ))}
         </nav>
       </header>
 

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   createSubmission,
-  getSubmissionById,
+  getLessonSubmissions,
+  getSubmission,
   getSubmissions,
   gradeSubmission,
   updateSubmission,
@@ -12,7 +13,7 @@ export function useSubmissions(initialParams = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
+  const [pageSize, setPageSize] = useState(6);
   const [total, setTotal] = useState(0);
   const [queryParams, setQueryParams] = useState(initialParams);
 
@@ -22,7 +23,10 @@ export function useSubmissions(initialParams = {}) {
       setError('');
       try {
         const params = { ...queryParams, ...override, page, pageSize };
-        const data = await getSubmissions(params);
+        const { course_id, lesson_id, ...rest } = params;
+        const data = lesson_id
+          ? await getLessonSubmissions(course_id, lesson_id, rest)
+          : await getSubmissions(course_id, rest);
         setItems(data.items || []);
         setTotal(data.total || 0);
       } catch (fetchError) {
@@ -35,8 +39,12 @@ export function useSubmissions(initialParams = {}) {
   );
 
   useEffect(() => {
+    if (!queryParams.course_id && !queryParams.lesson_id) {
+      setLoading(false);
+      return;
+    }
     fetchList();
-  }, [fetchList]);
+  }, [fetchList, queryParams.course_id, queryParams.lesson_id]);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize]);
 
@@ -55,6 +63,6 @@ export function useSubmissions(initialParams = {}) {
     createSubmission,
     updateSubmission,
     gradeSubmission,
-    getSubmissionById,
+    getSubmissionById: getSubmission,
   };
 }
