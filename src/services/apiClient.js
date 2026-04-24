@@ -35,19 +35,9 @@ export const clearSession = () => {
 
 export const clearToken = () => clearSession();
 
-class ApiError extends Error {
-  constructor(message, status, endpoint) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.endpoint = endpoint;
-  }
-}
-
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const endpoint = `${API_BASE_URL}${path}`;
   const token = getToken();
-  const endpoint = `${API_BASE_URL}${path}`;
 
   const res = await fetch(endpoint, {
     method,

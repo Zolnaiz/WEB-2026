@@ -123,21 +123,7 @@ function persist() {
 }
 const genId = (prefix) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`;
 
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const digest = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `scrypt$${salt}$${digest}`;
-}
-
-function verifyPassword(password, passwordHash) {
-  if (!passwordHash) return false;
-  if (!passwordHash.startsWith('scrypt$')) return password === passwordHash;
-  const [, salt, hash] = passwordHash.split('$');
-  const digest = crypto.scryptSync(password, salt, 64).toString('hex');
-  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(digest, 'hex'));
-}
-
-function ensureDefaultUsers() {
+function ensureDefaultData() {
   const defaults = [
     { id: 'u-admin', name: 'Admin User', email: 'admin@must.edu.mn', role: 'admin' },
     { id: 'u-schooladmin', name: 'School Admin', email: 'schooladmin@must.edu.mn', role: 'schooladmin' },
@@ -298,7 +284,7 @@ function ensureTeacherOwnsCourse(req, res, courseId) {
   return false;
 }
 
-ensureDefaultUsers();
+ensureDefaultData();
 
 app.get('/api/health', (_req, res) => res.json({ message: 'ok' }));
 app.get('/api/roles', auth, allow('admin', 'schooladmin'), (_req, res) => res.json({ items: ROLES.map((id) => ({ id, name: id })) }));
