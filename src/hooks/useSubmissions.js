@@ -24,11 +24,13 @@ export function useSubmissions(initialParams = {}) {
       try {
         const params = { ...queryParams, ...override, page, pageSize };
         const { course_id, lesson_id, ...rest } = params;
+
         const data = lesson_id
           ? await getLessonSubmissions(course_id, lesson_id, rest)
-          : await getSubmissions(course_id, rest);
-        setItems(data.items || []);
-        setTotal(data.total || 0);
+          : await getSubmissions({ course_id, ...rest });
+
+        setItems(data?.items || []);
+        setTotal(data?.total || 0);
       } catch (fetchError) {
         setError(fetchError.message);
       } finally {
