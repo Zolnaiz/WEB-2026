@@ -23,10 +23,16 @@ const hashPassword = (password) => {
 const verifyPassword = (password, passwordHash) => {
   if (!passwordHash) return false;
   if (passwordHash.startsWith('scrypt$')) {
-    const [, salt, originalHash] = passwordHash.split('$');
-    if (!salt || !originalHash) return false;
-    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-    return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
+    try {
+      const [, salt, originalHash] = passwordHash.split('$');
+      if (!salt || !originalHash) return false;
+      if (!/^[a-f0-9]+$/i.test(originalHash) || originalHash.length !== 128) return false;
+      const hash = crypto.scryptSync(String(password), salt, 64).toString('hex');
+      if (hash.length !== originalHash.length) return false;
+      return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(originalHash, 'hex'));
+    } catch {
+      return false;
+    }
   }
   return password === passwordHash;
 };
@@ -228,8 +234,9 @@ app.post('/api/auth/register', (req, res) => {
 });
 
 app.post('/api/auth/login', (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ message: 'email and password are required' });
+  const email = String(req.body?.email || '').trim();
+  const password = req.body?.password;
+  if (!email || typeof password !== 'string' || !password) return res.status(400).json({ message: 'email and password are required' });
   const user = db.users.find((u) => u.email === email);
   if (!user) return res.status(401).json({ message: 'Invalid credentials' });
   if (!verifyPassword(password, user.passwordHash || user.password)) return res.status(401).json({ message: 'Invalid credentials' });
