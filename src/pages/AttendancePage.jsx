@@ -8,19 +8,26 @@ export default function AttendancePage() {
   const { pushToast } = useToast();
   const [attendance, setAttendance] = useState([]);
   const [leaves, setLeaves] = useState([]);
+  const [courses, setCourses] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [record, setRecord] = useState({ userId: 'u-student', courseId: 'c-1', date: new Date().toISOString().slice(0, 10), type: 'present' });
-  const [leaveForm, setLeaveForm] = useState({ reason: '', date: new Date().toISOString().slice(0, 10), courseId: 'c-1' });
+  const [record, setRecord] = useState({ userId: '', courseId: '', date: new Date().toISOString().slice(0, 10), type: 'present' });
+  const [leaveForm, setLeaveForm] = useState({ reason: '', date: new Date().toISOString().slice(0, 10), courseId: '' });
   const [busyAction, setBusyAction] = useState('');
 
   const load = async () => {
     setLoading(true);
     setError('');
     try {
-      const [attendanceRes, leaveRes] = await Promise.all([api.get('/attendance'), api.get('/leave-requests')]);
-      setAttendance(attendanceRes.items || []);
-      setLeaves(leaveRes.items || []);
+      const [attendanceRes, leaveRes, courseRes, userRes] = await Promise.allSettled([api.get('/attendance'), api.get('/leave-requests'), api.get('/courses'), api.get('/users')]);
+      if (attendanceRes.status === 'rejected') throw attendanceRes.reason;
+      if (leaveRes.status === 'rejected') throw leaveRes.reason;
+      if (courseRes.status === 'rejected') throw courseRes.reason;
+      setAttendance(attendanceRes.value.items || []);
+      setLeaves(leaveRes.value.items || []);
+      setCourses(courseRes.value.items || []);
+      setUsers(userRes.status === 'fulfilled' ? (userRes.value.items || []) : []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -29,6 +36,12 @@ export default function AttendancePage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!record.courseId && courses[0]) setRecord((p) => ({ ...p, courseId: courses[0].id }));
+    if (!leaveForm.courseId && courses[0]) setLeaveForm((p) => ({ ...p, courseId: courses[0].id }));
+    const student = users.find((u) => u.role === 'student');
+    if (!record.userId && student) setRecord((p) => ({ ...p, userId: student.id }));
+  }, [courses, users, record.courseId, record.userId, leaveForm.courseId]);
 
   const mark = async (event) => {
     event.preventDefault();

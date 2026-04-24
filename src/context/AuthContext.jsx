@@ -35,6 +35,11 @@ export function AuthProvider({ children }) {
       localStorage.setItem(USER_KEY, JSON.stringify(r.user));
       setTokenState(r.token);
       setUser(r.user);
+    } catch (error) {
+      if (error?.status === 501) {
+        console.error(`Login failed with 501 at endpoint: ${error.endpoint}`);
+      }
+      throw error;
     } finally {
       setLoading(false);
     }

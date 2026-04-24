@@ -2,24 +2,31 @@
   "users": [
     {
       "id": "u-admin",
-      "name": "Admin User",
-      "email": "admin@lms.com",
-      "password": "admin123",
-      "role": "admin"
+      "name": "Main Admin",
+      "email": "admin@must.edu.mn",
+      "role": "admin",
+      "passwordHash": "scrypt$13667ef1fc51329c3d293e6c18b39136$d5da428574524a14362c99d2887666662b111a1bd7a1165da8361fbcf34a7423f05188177b0de5a2aef9b7576b8309c656d7959884f162241d8ce0cd4212696f"
     },
     {
-      "id": "u-teacher",
-      "name": "Teacher User",
-      "email": "teacher@lms.com",
-      "password": "teacher123",
-      "role": "teacher"
+      "id": "u-schooladmin",
+      "name": "School Admin",
+      "email": "schooladmin@must.edu.mn",
+      "role": "schooladmin",
+      "passwordHash": "scrypt$964d1bfe8d82837a7e2298cb3b1a446b$b43f9808fcf65d63ffab24904ba774addc63f435a103d7e595ef63c4417f045bc7b64211eea49df6e0e5d783020417b71833af3f4f60e274f9ccf5d8a26ebc3a"
     },
     {
-      "id": "u-student",
-      "name": "Student User",
-      "email": "student@lms.com",
-      "password": "student123",
-      "role": "student"
+      "id": "u-schoolteacher",
+      "name": "School Teacher",
+      "email": "schoolteacher@must.edu.mn",
+      "role": "teacher",
+      "passwordHash": "scrypt$eeabecf7b09ffe0a4fecb6df6aa954ce$778379f80d9a91039ed685e0562b41d577415844461e6a6695d62dbcf4c12b56102cdf414fd63da2e86725a021f8bab94c0a0b952a65aab7b945ecefcd18deec"
+    },
+    {
+      "id": "u-schoolstudent",
+      "name": "School Student",
+      "email": "schoolstudent@must.edu.mn",
+      "role": "student",
+      "passwordHash": "scrypt$9069cf0481b03feaa46c2c6aaad14570$df2d69fe95394e73cf3cea426b20effa752daacda003e8d2cf0ea7a067caf2ddd6ee0838d66f54dd3daaf3fbb55ac00cbbdf11f11490dd95affef305f0b87ed0"
     }
   ],
   "courses": [
@@ -27,7 +34,7 @@
       "id": "c-1",
       "title": "Web Engineering",
       "description": "Core LMS demo course",
-      "teacherId": "u-teacher",
+      "teacherId": "u-schoolteacher",
       "groupIds": [
         "g-1"
       ],
@@ -50,24 +57,11 @@
       "courseId": "c-1",
       "name": "Group A",
       "userIds": [
-        "u-student"
+        "u-schoolstudent"
       ]
     }
   ],
-  "submissions": [
-    {
-      "id": "sb-4b9a19c0",
-      "courseId": "c-1",
-      "lessonId": "l-1",
-      "userId": "u-student",
-      "content": "",
-      "fileUrl": "https://example.com/a.pdf",
-      "status": "submitted",
-      "grade": null,
-      "feedback": "",
-      "createdAt": "2026-04-24T05:07:14.987Z"
-    }
-  ],
+  "submissions": [],
   "exams": [
     {
       "id": "e-1",
@@ -112,5 +106,30 @@
     }
   ],
   "attendanceRecords": [],
-  "leaveRequests": []
+  "leaveRequests": [],
+  "schools": [
+    {
+      "id": "s-1",
+      "name": "MUST School of IT",
+      "adminUserId": "u-schooladmin"
+    }
+  ],
+  "roles": [
+    {
+      "id": "r-admin",
+      "code": "admin"
+    },
+    {
+      "id": "r-schooladmin",
+      "code": "schooladmin"
+    },
+    {
+      "id": "r-teacher",
+      "code": "teacher"
+    },
+    {
+      "id": "r-student",
+      "code": "student"
+    }
+  ]
 }
