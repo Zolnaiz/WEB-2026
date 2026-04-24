@@ -4,11 +4,16 @@
 
 ```bash
 npm install
-npm run server
 npm run dev
 ```
 
-Frontend runs at `http://localhost:5173` and backend API at `http://localhost:4000`.
+`npm run dev` нь frontend (`http://localhost:5173`) ба backend API (`http://localhost:4000`) хоёуланг хамт асаана.
+
+Хэрвээ зөвхөн frontend асаах бол:
+
+```bash
+npm run dev:web
+```
 
 ## API base URL setup
 
