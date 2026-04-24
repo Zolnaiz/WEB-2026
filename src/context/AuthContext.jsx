@@ -1,58 +1,28 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
 
 const MOCK_USERS = {
-  student: {
-    id: 'user-student-1',
-    role: 'student',
-    group_id: 'group-a',
-  },
-  teacher: {
-    id: 'user-teacher-1',
-    role: 'teacher',
-  },
-  admin: {
-    id: 'user-admin-1',
-    role: 'admin',
-  },
+  student: { id: 'user-student-1', role: 'student' },
+  teacher: { id: 'user-teacher-1', role: 'teacher' },
+  admin: { id: 'user-admin-1', role: 'admin' },
 };
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children, initialRole = 'student' }) {
-  const [role, setRole] = useState(initialRole);
-  const [groupId, setGroupId] = useState(MOCK_USERS[initialRole]?.group_id);
+export function AuthProvider({ children }) {
+  const [role, setRole] = useState('student');
 
-  const currentUser = useMemo(() => {
-    const base = MOCK_USERS[role] ?? MOCK_USERS.student;
-
-    if (role === 'student') {
-      return {
-        ...base,
-        group_id: groupId,
-      };
-    }
-
-    return base;
-  }, [role, groupId]);
-
-  const switchRole = (nextRole) => {
-    if (!MOCK_USERS[nextRole]) {
-      throw new Error(`Unsupported mock role: ${nextRole}`);
-    }
-
-    setRole(nextRole);
-    setGroupId(MOCK_USERS[nextRole]?.group_id);
-  };
+  const user = useMemo(() => MOCK_USERS[role] ?? MOCK_USERS.student, [role]);
 
   const value = useMemo(
     () => ({
-      currentUser,
+      user,
       role,
-      switchRole,
-      setGroupId,
+      switchRole: (nextRole) => {
+        if (MOCK_USERS[nextRole]) setRole(nextRole);
+      },
       availableRoles: Object.keys(MOCK_USERS),
     }),
-    [currentUser, role]
+    [user, role]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -60,13 +30,6 @@ export function AuthProvider({ children, initialRole = 'student' }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }
-
-// Alias requested in task, if the codebase prefers this naming.
-export const useMockAuth = useAuth;

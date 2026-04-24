@@ -1,21 +1,16 @@
 import React from 'react';
-import { getSubmissionLockReason } from '../utils/submissionAccess';
+import { isSubmissionGraded } from '../utils/submissionAccess';
 
 export default function SubmissionLockIndicator({ currentUser, submission }) {
-  const reason = getSubmissionLockReason(currentUser, submission);
+  if (!submission) return null;
 
-  if (!reason) {
-    return null;
+  if (isSubmissionGraded(submission)) {
+    return <p className="text-sm font-medium text-amber-700">Locked after grading.</p>;
   }
 
-  return (
-    <p
-      role="status"
-      aria-live="polite"
-      style={{ color: '#9a3412', fontWeight: 600, marginTop: '0.5rem' }}
-      data-testid="submission-lock-indicator"
-    >
-      {reason}
-    </p>
-  );
+  if (currentUser?.role === 'student' && currentUser.id !== submission.user_id) {
+    return <p className="text-sm font-medium text-amber-700">You can only edit your own submission.</p>;
+  }
+
+  return null;
 }
