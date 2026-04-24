@@ -1,54 +1,38 @@
-const BASE_URL = '/api/submissions';
+import { apiClient } from './apiClient';
 
-async function handleResponse(response) {
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    const message = payload.message || 'Request failed';
-    const error = new Error(message);
-    error.details = payload.errors || {};
-    throw error;
-  }
-  return response.json();
+const SUBMISSIONS_ENDPOINT = import.meta.env.VITE_SUBMISSIONS_ENDPOINT || '/submissions';
+
+function toQueryString(params = {}) {
+  const cleaned = Object.entries(params).reduce((acc, [key, value]) => {
+    if (value === undefined || value === null || value === '') return acc;
+    acc[key] = value;
+    return acc;
+  }, {});
+
+  const query = new URLSearchParams(cleaned).toString();
+  return query ? `?${query}` : '';
 }
 
-export async function getSubmissions(course_id, options = {}) {
-  const query = new URLSearchParams({ course_id, ...options }).toString();
-  const response = await fetch(query ? `${BASE_URL}?${query}` : BASE_URL);
-  return handleResponse(response);
+export function getSubmissions(params = {}) {
+  return apiClient.get(`${SUBMISSIONS_ENDPOINT}${toQueryString(params)}`);
 }
 
-export async function getLessonSubmissions(course_id, lesson_id, options = {}) {
-  return getSubmissions(course_id, { lesson_id, ...options });
+export function getLessonSubmissions(course_id, lesson_id, options = {}) {
+  return getSubmissions({ course_id, lesson_id, ...options });
 }
 
-export async function getSubmission(id) {
-  const response = await fetch(`${BASE_URL}/${id}`);
-  return handleResponse(response);
+export function getSubmission(id) {
+  return apiClient.get(`${SUBMISSIONS_ENDPOINT}/${id}`);
 }
 
-export async function createSubmission(data) {
-  const response = await fetch(BASE_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  return handleResponse(response);
+export function createSubmission(data) {
+  return apiClient.post(SUBMISSIONS_ENDPOINT, data);
 }
 
-export async function updateSubmission(id, data) {
-  const response = await fetch(`${BASE_URL}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  return handleResponse(response);
+export function updateSubmission(id, data) {
+  return apiClient.put(`${SUBMISSIONS_ENDPOINT}/${id}`, data);
 }
 
-export async function gradeSubmission(id, data) {
-  const response = await fetch(`${BASE_URL}/${id}/grade`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  });
-  return handleResponse(response);
+export function gradeSubmission(id, data) {
+  return apiClient.post(`${SUBMISSIONS_ENDPOINT}/${id}/grade`, data);
 }

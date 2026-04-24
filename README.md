@@ -102,3 +102,26 @@ curl -X POST 'http://localhost:4000/api/submissions/sub-1/grade' \
     "grader_id": "user-teacher-1"
   }'
 ```
+
+
+## Production API Integration
+
+This project now uses a centralized API client with Bearer authentication for the real LMS API.
+
+### Environment variables
+
+Create `.env` from `.env.example` and set:
+
+- `VITE_API_BASE_URL=https://todu.mn/bs/lms/v1`
+- `VITE_SUBMISSIONS_ENDPOINT=/submissions`
+- `VITE_AUTH_TOKEN_KEY=lms_access_token`
+- `VITE_AUTH_USER_KEY=lms_auth_user`
+
+### What is implemented
+
+- Centralized API client: `src/services/apiClient.js`
+- Bearer token from localStorage automatically attached in every request
+- Unauthorized (`401`) auto-clears token and redirects to `/login`
+- Login function in API client (`POST /auth/login`)
+- Submission service layer in `src/services/submissionService.js` (GET/POST/PUT)
+- Example React usage in `src/components/SubmissionsExample.jsx`
