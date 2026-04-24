@@ -3,14 +3,17 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', roles: ['admin', 'teacher', 'student'] },
-  { to: '/users', label: 'Users', roles: ['admin'] },
-  { to: '/courses', label: 'Courses', roles: ['admin', 'teacher', 'student'] },
+  { to: '/', label: 'Dashboard', roles: ['admin', 'schooladmin', 'teacher', 'student'] },
+  { to: '/users', label: 'Users', roles: ['admin', 'schooladmin'] },
+  { to: '/roles', label: 'Roles', roles: ['admin', 'schooladmin'] },
+  { to: '/schools/current', label: 'School', roles: ['admin', 'schooladmin'] },
+  { to: '/courses', label: 'Courses', roles: ['admin', 'schooladmin', 'teacher', 'student'] },
   { to: '/lessons', label: 'Lessons', roles: ['admin', 'teacher', 'student'] },
   { to: '/submissions', label: 'Submissions', roles: ['admin', 'teacher', 'student'] },
   { to: '/exams', label: 'Exams', roles: ['admin', 'teacher', 'student'] },
   { to: '/attendance', label: 'Attendance', roles: ['admin', 'teacher', 'student'] },
   { to: '/groups', label: 'Groups', roles: ['admin', 'teacher', 'student'] },
+  { to: '/profile', label: 'Profile', roles: ['admin', 'schooladmin', 'teacher', 'student'] },
 ];
 
 export default function AppShell({ children }) {

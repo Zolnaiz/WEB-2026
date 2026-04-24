@@ -13,15 +13,16 @@ export default function ExamsPage() {
   const [exams, setExams] = useState([]);
   const [variants, setVariants] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [courses, setCourses] = useState([]);
 
   const [attempt, setAttempt] = useState(null);
   const [attemptQuestions, setAttemptQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
   const [busyAction, setBusyAction] = useState('');
 
-  const [createExamForm, setCreateExamForm] = useState({ courseId: 'c-1', title: '', durationMinutes: 30 });
-  const [createVariantForm, setCreateVariantForm] = useState({ examId: 'e-1', title: '' });
-  const [createQuestionForm, setCreateQuestionForm] = useState({ variantId: 'v-1', text: '', optionsText: 'A,B', correctAnswer: 'A' });
+  const [createExamForm, setCreateExamForm] = useState({ courseId: '', title: '', durationMinutes: 30 });
+  const [createVariantForm, setCreateVariantForm] = useState({ examId: '', title: '' });
+  const [createQuestionForm, setCreateQuestionForm] = useState({ variantId: '', text: '', optionsText: 'A,B', correctAnswer: 'A' });
 
   const variantsByExam = useMemo(() => variants.reduce((acc, item) => {
     acc[item.examId] = acc[item.examId] || [];
@@ -33,14 +34,16 @@ export default function ExamsPage() {
     setLoading(true);
     setError('');
     try {
-      const [examRes, variantRes, questionRes] = await Promise.all([
+      const [examRes, variantRes, questionRes, courseRes] = await Promise.all([
         api.get('/exams'),
         api.get('/exam-variants'),
         api.get('/exam-questions'),
+        api.get('/courses'),
       ]);
       setExams(examRes.items || []);
       setVariants(variantRes.items || []);
       setQuestions(questionRes.items || []);
+      setCourses(courseRes.items || []);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -49,6 +52,11 @@ export default function ExamsPage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    if (!createExamForm.courseId && courses[0]) setCreateExamForm((p) => ({ ...p, courseId: courses[0].id }));
+    if (!createVariantForm.examId && exams[0]) setCreateVariantForm((p) => ({ ...p, examId: exams[0].id }));
+    if (!createQuestionForm.variantId && variants[0]) setCreateQuestionForm((p) => ({ ...p, variantId: variants[0].id }));
+  }, [courses, exams, variants, createExamForm.courseId, createVariantForm.examId, createQuestionForm.variantId]);
 
   const createExam = async (event) => {
     event.preventDefault();

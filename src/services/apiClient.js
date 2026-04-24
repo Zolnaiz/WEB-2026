@@ -15,9 +15,19 @@ export const clearSession = () => {
 };
 export const clearToken = () => clearSession();
 
+class ApiError extends Error {
+  constructor(message, status, endpoint) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.endpoint = endpoint;
+  }
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
+  const endpoint = `${API_BASE_URL}${path}`;
   const token = getToken();
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const res = await fetch(endpoint, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -34,6 +44,9 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
       data = { message: text };
     }
   }
+  if (res.status === 501) {
+    console.error(`API 501 Not Implemented: ${method} ${endpoint}`);
+  }
   if (res.status === 401) {
     clearSession();
     if (window.location.pathname !== '/login') window.location.href = '/login';
@@ -41,7 +54,10 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   if (res.status === 403 && window.location.pathname !== '/403') {
     window.location.href = '/403';
   }
-  if (!res.ok || (data && data.success === false)) throw new Error(data?.message || `HTTP ${res.status}`);
+  if (!res.ok || (data && data.success === false)) {
+    const serverMessage = data?.message || `HTTP ${res.status}`;
+    throw new ApiError(`${serverMessage} (${res.status})`, res.status, endpoint);
+  }
   if (data && typeof data === 'object' && Object.prototype.hasOwnProperty.call(data, 'success')) {
     return data.data ?? null;
   }
@@ -54,3 +70,5 @@ export const api = {
   put: (p, b) => request(p, { method: 'PUT', body: b }),
   del: (p) => request(p, { method: 'DELETE' }),
 };
+
+export const getApiBaseUrl = () => API_BASE_URL;
