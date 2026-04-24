@@ -2,11 +2,49 @@ import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
+const NAV_ITEMS = [
+  { to: '/', label: 'Dashboard', roles: ['admin', 'teacher', 'student'] },
+  { to: '/users', label: 'Users', roles: ['admin'] },
+  { to: '/courses', label: 'Courses', roles: ['admin', 'teacher', 'student'] },
+  { to: '/lessons', label: 'Lessons', roles: ['admin', 'teacher', 'student'] },
+  { to: '/submissions', label: 'Submissions', roles: ['admin', 'teacher', 'student'] },
+  { to: '/exams', label: 'Exams', roles: ['admin', 'teacher', 'student'] },
+  { to: '/attendance', label: 'Attendance', roles: ['admin', 'teacher', 'student'] },
+  { to: '/groups', label: 'Groups', roles: ['admin', 'teacher', 'student'] },
+];
+
 export default function AppShell({ children }) {
   const { role, logout } = useAuth();
-  const nav = [
-    ['/', 'Dashboard'], ['/users', 'Users'], ['/courses', 'Courses'], ['/lessons', 'Lessons'], ['/submissions', 'Submissions'], ['/exams', 'Exams'], ['/attendance', 'Attendance'], ['/groups', 'Groups'],
-  ];
   const navigate = useNavigate();
-  return <div className="min-h-screen bg-slate-100"><header className="bg-white border-b"><div className="max-w-6xl mx-auto px-4 py-3 flex justify-between"><div className="font-semibold">LMS</div><div className="flex items-center gap-3 text-sm"><span>{role}</span><button className="px-3 py-1 border rounded" onClick={()=>{logout();navigate('/login');}}>Logout</button></div></div><nav className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap gap-2">{nav.map(([to,label])=><Link className="px-3 py-1 bg-slate-200 rounded text-sm" key={to} to={to}>{label}</Link>)}</nav></header><main className="max-w-6xl mx-auto p-4">{children}</main></div>;
+  const allowedNav = NAV_ITEMS.filter((item) => item.roles.includes(role));
+
+  return (
+    <div className="min-h-screen bg-slate-100">
+      <header className="border-b bg-white">
+        <div className="mx-auto flex max-w-6xl justify-between px-4 py-3">
+          <div className="font-semibold">LMS</div>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="capitalize">{role}</span>
+            <button
+              className="rounded border px-3 py-1"
+              onClick={async () => {
+                await logout();
+                navigate('/login');
+              }}
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+        <nav className="mx-auto flex max-w-6xl flex-wrap gap-2 px-4 py-2">
+          {allowedNav.map((item) => (
+            <Link className="rounded bg-slate-200 px-3 py-1 text-sm" key={item.to} to={item.to}>
+              {item.label}
+            </Link>
+          ))}
+        </nav>
+      </header>
+      <main className="mx-auto max-w-6xl p-4">{children}</main>
+    </div>
+  );
 }
