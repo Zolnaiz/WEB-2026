@@ -3,23 +3,30 @@
     {
       "id": "u-admin",
       "name": "Admin User",
-      "email": "admin@lms.com",
-      "password": "admin123",
-      "role": "admin"
+      "email": "admin@must.edu.mn",
+      "role": "admin",
+      "passwordHash": "scrypt$c61c400270eadcd5d3a0010e308bb1a7$0e622449b3d16f0bd5b801e91ddb5c924b499dc2b1b3603542b9dd4bd080de3d66ae5634f1f4361906c73357cac9614dfa365f5f119cce6f9c63b604d8c7d717"
+    },
+    {
+      "id": "u-schooladmin",
+      "name": "School Admin",
+      "email": "schooladmin@must.edu.mn",
+      "role": "schooladmin",
+      "passwordHash": "scrypt$a3948314e92ae9d4fac7803c9fc2ae06$e65f4adbe291010f2f7f58d7dd9680fb7f5b0a0555056304f716f3dc8e26415fbfaed43cd11f8a632258df385f11450794a94917e26dcede69611da727bef15d"
     },
     {
       "id": "u-teacher",
-      "name": "Teacher User",
-      "email": "teacher@lms.com",
-      "password": "teacher123",
-      "role": "teacher"
+      "name": "School Teacher",
+      "email": "schoolteacher@must.edu.mn",
+      "role": "teacher",
+      "passwordHash": "scrypt$37211d7c0e217a167ef66dc83a755b70$a59ba32a75a870a455f333edc058d20dd330830f53fdbb06789d6c7a6687e76ed98ef8c0f17d0bc1acb17d01ad1f2f0d0642dd4aa8f1515f63b15ece2017f153"
     },
     {
       "id": "u-student",
-      "name": "Student User",
-      "email": "student@lms.com",
-      "password": "student123",
-      "role": "student"
+      "name": "School Student",
+      "email": "schoolstudent@must.edu.mn",
+      "role": "student",
+      "passwordHash": "scrypt$8935859ab3cc15253eea30a2e9397956$6441cbca49a7c8e991d196bad7720c9438c7189f7e5c1d4f6d5e85d7509c344bd59c32359c111c6d8b21a5f944c971b649085705530cf0a39d338b754697595c"
     }
   ],
   "courses": [
@@ -62,10 +69,12 @@
       "userId": "u-student",
       "content": "",
       "fileUrl": "https://example.com/a.pdf",
-      "status": "submitted",
-      "grade": null,
-      "feedback": "",
-      "createdAt": "2026-04-24T05:07:14.987Z"
+      "status": "graded",
+      "grade": 95,
+      "feedback": "ok",
+      "createdAt": "2026-04-24T05:07:14.987Z",
+      "gradedBy": "u-teacher",
+      "gradedAt": "2026-04-24T06:17:50.999Z"
     }
   ],
   "exams": [
@@ -74,6 +83,12 @@
       "courseId": "c-1",
       "title": "Midterm",
       "durationMinutes": 30
+    },
+    {
+      "id": "ex-84b3c93e",
+      "courseId": "c-1",
+      "title": "Quiz",
+      "durationMinutes": 30
     }
   ],
   "examVariants": [
@@ -81,6 +96,11 @@
       "id": "v-1",
       "examId": "e-1",
       "title": "Variant A"
+    },
+    {
+      "id": "va-6a6d0f20",
+      "examId": "ex-84b3c93e",
+      "title": "V2"
     }
   ],
   "examQuestions": [
@@ -94,9 +114,33 @@
         "5"
       ],
       "correctAnswer": "4"
+    },
+    {
+      "id": "qu-33049334",
+      "variantId": "va-6a6d0f20",
+      "text": "1+1?",
+      "options": [
+        "1",
+        "2"
+      ],
+      "correctAnswer": "2"
     }
   ],
-  "examAttempts": [],
+  "examAttempts": [
+    {
+      "id": "atp-4a942976",
+      "examId": "e-1",
+      "userId": "u-student",
+      "variantId": "v-1",
+      "answers": {
+        "q-1": "4"
+      },
+      "status": "finished",
+      "score": 100,
+      "startedAt": "2026-04-24T06:17:51.012Z",
+      "finishedAt": "2026-04-24T06:17:51.019Z"
+    }
+  ],
   "attendanceTypes": [
     {
       "id": "at-1",

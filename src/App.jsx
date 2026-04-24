@@ -13,6 +13,9 @@ import SubmissionsPage from './pages/SubmissionsPage';
 import ExamsPage from './pages/ExamsPage';
 import AttendancePage from './pages/AttendancePage';
 import GroupsPage from './pages/GroupsPage';
+import ApiModulePage from './pages/ApiModulePage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 const inShell = (el, roles) => <ProtectedRoute roles={roles}>{el}</ProtectedRoute>;
 
@@ -21,6 +24,8 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/403" element={<ForbiddenPage />} />
       <Route
         path="*"
@@ -29,13 +34,16 @@ export default function App() {
             <AppShell>
               <Routes>
                 <Route path="/" element={<DashboardPage />} />
-                <Route path="/users" element={inShell(<UsersPage />, ['admin'])} />
-                <Route path="/courses" element={inShell(<CoursesPage />, ['admin', 'teacher', 'student'])} />
-                <Route path="/lessons" element={inShell(<LessonsPage />, ['admin', 'teacher', 'student'])} />
-                <Route path="/submissions" element={inShell(<SubmissionsPage />, ['admin', 'teacher', 'student'])} />
-                <Route path="/exams" element={inShell(<ExamsPage />, ['admin', 'teacher', 'student'])} />
-                <Route path="/attendance" element={inShell(<AttendancePage />, ['admin', 'teacher', 'student'])} />
-                <Route path="/groups" element={inShell(<GroupsPage />, ['admin', 'teacher', 'student'])} />
+                <Route path="/users" element={inShell(<UsersPage />, ['admin', 'schooladmin'])} />
+                <Route path="/courses" element={inShell(<CoursesPage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                <Route path="/lessons" element={inShell(<LessonsPage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                <Route path="/submissions" element={inShell(<SubmissionsPage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                <Route path="/exams" element={inShell(<ExamsPage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                <Route path="/attendance" element={inShell(<AttendancePage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                <Route path="/groups" element={inShell(<GroupsPage />, ['admin', 'schooladmin', 'teacher'])} />
+                {['/roles', '/school', '/grade', '/profile', '/profile/change-password', '/question-types', '/question-levels'].map((path) => (
+                  <Route key={path} path={path} element={inShell(<ApiModulePage />, ['admin', 'schooladmin', 'teacher', 'student'])} />
+                ))}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppShell>
