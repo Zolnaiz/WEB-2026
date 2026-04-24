@@ -1,108 +1,58 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
-import { apiClient, clearStoredToken, getStoredToken, setStoredToken } from '../services/apiClient';
-
-const USER_KEY = import.meta.env.VITE_AUTH_USER_KEY || 'lms_auth_user';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { api, clearToken, getToken, setToken } from '../services/apiClient';
 
 const AuthContext = createContext(null);
-
-function getStoredUser() {
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function setStoredUser(user) {
-  if (!user) {
-    localStorage.removeItem(USER_KEY);
-    return;
-  }
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
-}
-
-function parseJwtPayload(token) {
-  if (!token || !token.includes('.')) return null;
-  try {
-    const payload = token.split('.')[1];
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((char) => `%${`00${char.charCodeAt(0).toString(16)}`.slice(-2)}`)
-        .join('')
-    );
-    return JSON.parse(json);
-  } catch {
-    return null;
-  }
-}
+const USER_KEY = import.meta.env.VITE_AUTH_USER_KEY || 'lms_auth_user';
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(() => getStoredToken());
-  const [user, setUser] = useState(() => getStoredUser());
-  const [authLoading, setAuthLoading] = useState(false);
-  const [authError, setAuthError] = useState('');
+  const [token, setTokenState] = useState(() => getToken());
+  const [user, setUser] = useState(() => JSON.parse(localStorage.getItem(USER_KEY) || 'null'));
+  const [loading, setLoading] = useState(false);
 
-  const login = async (credentials) => {
-    setAuthLoading(true);
-    setAuthError('');
+  useEffect(() => {
+    if (!token) return;
+    api.get('/auth/me').then((r) => setUser(r.user)).catch(() => logout());
+  }, [token]);
+
+  const login = async (email, password) => {
+    setLoading(true);
     try {
-      const response = await apiClient.login(credentials);
-      const accessToken = response?.access_token || response?.token || response?.data?.token;
-      if (!accessToken) {
-        throw new Error('Login succeeded but token was not returned by API.');
-      }
-
-      const resolvedUser =
-        response?.user ||
-        response?.data?.user ||
-        parseJwtPayload(accessToken) ||
-        { id: credentials.username || credentials.email || 'unknown-user', role: 'student' };
-
-      setStoredToken(accessToken);
-      setStoredUser(resolvedUser);
-      setToken(accessToken);
-      setUser(resolvedUser);
-      return resolvedUser;
-    } catch (error) {
-      setAuthError(error.message || 'Unable to login.');
-      throw error;
+      const r = await api.post('/auth/login', { email, password }, false);
+      setToken(r.token);
+      localStorage.setItem(USER_KEY, JSON.stringify(r.user));
+      setTokenState(r.token);
+      setUser(r.user);
     } finally {
-      setAuthLoading(false);
+      setLoading(false);
+    }
+  };
+
+  const register = async (payload) => {
+    setLoading(true);
+    try {
+      const r = await api.post('/auth/register', payload, false);
+      setToken(r.token);
+      localStorage.setItem(USER_KEY, JSON.stringify(r.user));
+      setTokenState(r.token);
+      setUser(r.user);
+    } finally {
+      setLoading(false);
     }
   };
 
   const logout = () => {
-    clearStoredToken();
-    setStoredUser(null);
-    setToken(null);
+    clearToken();
+    localStorage.removeItem(USER_KEY);
+    setTokenState(null);
     setUser(null);
   };
 
-  const role = user?.role || 'student';
-
-  const value = useMemo(
-    () => ({
-      token,
-      user,
-      role,
-      login,
-      logout,
-      authLoading,
-      authError,
-      isAuthenticated: Boolean(token),
-    }),
-    [token, user, role, authLoading, authError]
-  );
-
+  const value = useMemo(() => ({ token, user, role: user?.role, loading, login, register, logout, isAuthenticated: !!token }), [token, user, loading]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
-}
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used in AuthProvider');
+  return ctx;
+};

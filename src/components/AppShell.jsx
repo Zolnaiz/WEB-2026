@@ -1,67 +1,12 @@
 import React from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function AppShell({ children }) {
-  const { role, logout, isAuthenticated } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
-
-  const navLinks = [
-    { to: '/courses/course-1/submissions', label: 'Teacher Dashboard', roles: ['teacher', 'admin'] },
-    {
-      to: '/courses/course-1/lessons/lesson-1/submissions',
-      label: 'Lesson Submissions',
-      roles: ['student', 'teacher', 'admin'],
-    },
-    {
-      to: '/courses/course-1/lessons/lesson-1/submissions/create',
-      label: 'Create Submission',
-      roles: ['student', 'admin'],
-    },
-    { to: '/examples/submissions', label: 'API Example', roles: ['student', 'teacher', 'admin'] },
+  const { role, logout } = useAuth();
+  const nav = [
+    ['/', 'Dashboard'], ['/users', 'Users'], ['/courses', 'Courses'], ['/lessons', 'Lessons'], ['/submissions', 'Submissions'], ['/exams', 'Exams'], ['/attendance', 'Attendance'], ['/groups', 'Groups'],
   ];
-
-  const visibleLinks = navLinks.filter((item) => item.roles.includes(role));
-
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4">
-          <h1 className="text-xl font-semibold">LMS Assignment Module</h1>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-slate-600">Role: {role}</span>
-            {isAuthenticated && (
-              <button
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm"
-                onClick={() => {
-                  logout();
-                  navigate('/login');
-                }}
-              >
-                Logout
-              </button>
-            )}
-          </div>
-        </div>
-        <nav className="mx-auto flex w-full max-w-7xl flex-wrap gap-2 px-4 pb-4">
-          {visibleLinks.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`rounded-md px-3 py-2 text-sm font-medium ${
-                location.pathname === item.to
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-      </header>
-
-      <main className="mx-auto w-full max-w-7xl px-4 py-6">{children}</main>
-    </div>
-  );
+  const navigate = useNavigate();
+  return <div className="min-h-screen bg-slate-100"><header className="bg-white border-b"><div className="max-w-6xl mx-auto px-4 py-3 flex justify-between"><div className="font-semibold">LMS</div><div className="flex items-center gap-3 text-sm"><span>{role}</span><button className="px-3 py-1 border rounded" onClick={()=>{logout();navigate('/login');}}>Logout</button></div></div><nav className="max-w-6xl mx-auto px-4 py-2 flex flex-wrap gap-2">{nav.map(([to,label])=><Link className="px-3 py-1 bg-slate-200 rounded text-sm" key={to} to={to}>{label}</Link>)}</nav></header><main className="max-w-6xl mx-auto p-4">{children}</main></div>;
 }
